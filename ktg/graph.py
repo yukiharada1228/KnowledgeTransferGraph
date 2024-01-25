@@ -139,5 +139,8 @@ class KnowledgeTransferGraph:
         for node in self.nodes:
             node.writer.close()
 
+        best_top1 = self.nodes[0].best_top1
+        return best_top1
+
     def __len__(self):
         return len(self.nodes)
