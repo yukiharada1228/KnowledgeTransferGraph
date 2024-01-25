@@ -161,7 +161,8 @@ def objective(trial):
         test_dataloader=test_dataloader,
         trial=trial,
     )
-    graph.train()
+    best_top1 = graph.train()
+    return best_top1
 
 
 if __name__ == "__main__":
