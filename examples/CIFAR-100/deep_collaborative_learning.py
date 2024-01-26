@@ -127,7 +127,7 @@ def objective(trial):
         else:
             model_name = trial.suggest_categorical(f"{i}_model", models_name)
         model = getattr(cifar_models, model_name)(num_classes).cuda()
-        if all(gate.__class__.__name__ == "CutoffGate" for gate in gates_list):
+        if all(gate.__class__.__name__ == "CutoffGate" for gate in gates_list) and i != 0:
             load_checkpoint(
                 model=model, save_dir=f"checkpoint/pre-train/{model_name}", is_best=True
             )
@@ -174,9 +174,9 @@ if __name__ == "__main__":
         storage=storage,
         study_name="experiment",
         sampler=optuna.samplers.TPESampler(multivariate=True),
-        pruner=optuna.pruners.SuccessiveHalvingPruner(),
+        pruner=optuna.pruners.NopPruner(),
         direction="maximize",
         load_if_exists=True,
     )
     # Start optimization
-    study.optimize(objective, n_trials=1500)
+    study.optimize(objective, n_trials=50)
