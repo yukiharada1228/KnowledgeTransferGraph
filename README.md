@@ -7,7 +7,7 @@
 
 # KnowledgeTransferGraph
 
-This repository implements the "Knowledge Transfer Graph for Deep Collaborative Learning" described in the [arXiv paper](https://arxiv.org/abs/1909.04286). Notably, this implementation deviates from the original paper in certain aspects related to hyperparameter tuning.
+This repository implements the "Knowledge Transfer Graph for Deep Collaborative Learning" described in the [ACCV 2020 accepted paper](https://openaccess.thecvf.com/content/ACCV2020/html/Minami_Knowledge_Transfer_Graph_for_Deep_Collaborative_Learning_ACCV_2020_paper.html). Notably, this implementation deviates from the original paper in certain aspects related to hyperparameter tuning.
 
 ## Changes Made to Hyperparameter Tuning
 
