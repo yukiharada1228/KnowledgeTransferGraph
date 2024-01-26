@@ -1,3 +1,9 @@
+<p style="display: inline">
+  <img src="https://img.shields.io/badge/-Python-F2C63C.svg?logo=python&style=for-the-badge">
+  <img src="https://img.shields.io/badge/-Pytorch-11b3d3.svg?logo=pytorch&style=for-the-badge">
+  <!-- <img src="https://img.shields.io/badge/-Docker-eb7739.svg?logo=docker&style=for-the-badge"> -->
+</p>
+
 # KnowledgeTransferGraph
 
 This repository implements the "Knowledge Transfer Graph for Deep Collaborative Learning" described in the [arXiv paper](https://arxiv.org/abs/1909.04286). Notably, this implementation deviates from the original paper in certain aspects related to hyperparameter tuning.
