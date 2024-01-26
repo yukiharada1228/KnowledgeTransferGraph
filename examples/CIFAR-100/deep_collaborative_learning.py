@@ -17,7 +17,7 @@ from torchvision import datasets, transforms
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
-parser.add_argument("--num-nodes", default=2)
+parser.add_argument("--num-nodes", default=5)
 parser.add_argument(
     "--models",
     default=["resnet20", "resnet32", "resnet56", "resnet110"],
@@ -127,12 +127,17 @@ def objective(trial):
         else:
             model_name = trial.suggest_categorical(f"{i}_model", models_name)
         model = getattr(cifar_models, model_name)(num_classes).cuda()
-        if all(gate.__class__.__name__ == "CutoffGate" for gate in gates_list) and i != 0:
+        if (
+            all(gate.__class__.__name__ == "CutoffGate" for gate in gates_list)
+            and i != 0
+        ):
             load_checkpoint(
                 model=model, save_dir=f"checkpoint/pre-train/{model_name}", is_best=True
             )
-        writer = SummaryWriter(f"runs/dcl/{trial.number:04}/{i}_{model_name}")
-        save_dir = f"checkpoint/dcl/{trial.number:04}/{i}_{model_name}"
+        writer = SummaryWriter(
+            f"runs/dcl_{num_nodes}/{trial.number:04}/{i}_{model_name}"
+        )
+        save_dir = f"checkpoint/dcl_{num_nodes}/{trial.number:04}/{i}_{model_name}"
         optimizer = getattr(torch.optim, optim_setting["name"])(
             model.parameters(), **optim_setting["args"]
         )
@@ -167,7 +172,7 @@ def objective(trial):
 
 if __name__ == "__main__":
     # Cteate study object
-    optuna_dir = "optuna/dcl"
+    optuna_dir = f"optuna/dcl_{num_nodes}"
     os.makedirs(optuna_dir, exist_ok=True)
     storage = JournalStorage(JournalFileStorage(os.path.join(optuna_dir, "optuna.log")))
     study = optuna.create_study(
