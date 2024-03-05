@@ -1,6 +1,6 @@
 __version__ = "0.0.0"
 
-from .graph import KnowledgeTransferGraph, Node
+from .graph import Edges, KnowledgeTransferGraph, Node
 
 __all__ = (
     "__version__",
@@ -10,4 +10,5 @@ __all__ = (
     "losses",
     "KnowledgeTransferGraph",
     "Node",
+    "Edges",
 )

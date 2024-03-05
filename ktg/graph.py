@@ -5,12 +5,38 @@ from dataclasses import dataclass
 import optuna
 import torch
 import torch.nn as nn
-from ktg.losses import TotalLoss
-from ktg.utils import AverageMeter, accuracy, save_checkpoint
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+
+from ktg.utils import AverageMeter, accuracy, save_checkpoint
+
+
+class Edges(nn.Module):
+    def __init__(self, criterions, gates):
+        super(Edges, self).__init__()
+        self.criterions = criterions
+        self.gates = gates
+
+    def forward(self, model_id, outputs, labels, epoch):
+        if model_id < 0 or model_id >= len(outputs):
+            raise ValueError(f"Invalid model_id: {model_id}")
+        losses = []
+        target_output = outputs[model_id]
+        label = labels[model_id]
+        for i, (source_output, criterion, gate) in enumerate(
+            zip(outputs, self.criterions, self.gates)
+        ):
+            if i == model_id:
+                loss = gate(criterion(target_output, label), epoch)
+            elif gate.__class__.__name__ != "CutoffGate":
+                losses += [
+                    gate(criterion(target_output, source_output.detach()), epoch)
+                ]
+        if len(losses) > 0:
+            loss = loss + torch.stack(losses).mean()
+        return loss
 
 
 @dataclass
@@ -21,7 +47,7 @@ class Node:
     save_dir: str
     optimizer: Optimizer
     scheduler: LRScheduler
-    criterion: TotalLoss
+    edges: Edges
     loss_meter: AverageMeter
     top1_meter: AverageMeter
     best_top1: float = 0.0
@@ -53,12 +79,6 @@ class KnowledgeTransferGraph:
         labels = []
         for node in self.nodes:
             node.model.train()
-            node.model.zero_grad()
-            node.optimizer.zero_grad()
-            for criterion in node.criterion.criterions:
-                criterion.zero_grad()
-            for gate in node.criterion.gates:
-                gate.zero_grad()
             with torch.cuda.amp.autocast():
                 y = node.model(image)
             outputs.append(y)
@@ -68,11 +88,12 @@ class KnowledgeTransferGraph:
             [top1] = accuracy(outputs[model_id], labels[model_id], topk=(1,))
 
             with torch.cuda.amp.autocast():
-                loss = node.criterion(model_id, outputs, labels, epoch)
+                loss = node.edges(model_id, outputs, labels, epoch)
 
             if loss > 0:
                 node.scaler.scale(loss).backward()
                 node.scaler.step(node.optimizer)
+                node.optimizer.zero_grad()
                 node.scaler.update()
 
             node.loss_meter.update(loss.item(), labels[model_id].size(0))
