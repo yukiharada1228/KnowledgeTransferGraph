@@ -27,7 +27,3 @@ pip install .
 ## Acknowledgements
 
 This implementation is based on the original paper ["Knowledge Transfer Graph for Deep Collaborative Learning"](https://arxiv.org/abs/1909.04286) by Soma Minami, Tsubasa Hirakawa, Takayoshi Yamashita, and Hironobu Fujiyoshi. I acknowledge and appreciate their valuable contributions to the field.
-
-## License
-
-This project is licensed under the [Apache License 2.0](LICENSE).
