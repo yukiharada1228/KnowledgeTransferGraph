@@ -92,7 +92,9 @@ scheduler_setting = {
 
 nodes = []
 gates = [ThroughGate(max_epoch)]
-model = getattr(models, ssl_name)(encoder_func=getattr(cifar_models, model_name)).cuda()
+model = getattr(models, ssl_name)(
+    encoder_func=getattr(cifar_models, model_name), batch_size=batch_size
+).cuda()
 criterions = [getattr(losses, "SSLLoss")()]
 writer = SummaryWriter(
     f"runs/pre-train/{model_name}/{projector_name}/{transforms_name}/{ssl_name}"

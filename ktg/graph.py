@@ -74,7 +74,16 @@ class KnowledgeTransferGraph:
 
     def train_on_batch(self, image, label, epoch):
         if type(image) == list:
-            image = [img.cuda() for img in image]
+            if len(image) == 2:
+                image = [img.cuda() for img in image]
+            elif len(image) == 3:
+                image = [
+                    image[0].cuda(),
+                    image[1].cuda(),
+                    [img.cuda() for img in image[2]],
+                ]
+            else:
+                raise Exception("Invalid image list length. Expected length 2 or 3.")
         else:
             image = image.cuda()
         label = label.cuda()

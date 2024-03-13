@@ -1,1 +1,1 @@
-from .ssl_models import SimSiam
+from .ssl_models import SimSiam, SwAV
