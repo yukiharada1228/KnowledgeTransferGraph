@@ -72,7 +72,10 @@ class KnowledgeTransferGraph:
         self.trial = trial
 
     def train_on_batch(self, image, label, epoch):
-        image = image.cuda()
+        if type(image) == list:
+            image = [img.cuda() for img in image]
+        else:
+            image = image.cuda()
         label = label.cuda()
 
         outputs = []
@@ -85,37 +88,36 @@ class KnowledgeTransferGraph:
             labels.append(label)
 
         for model_id, node in enumerate(self.nodes):
-            [top1] = accuracy(outputs[model_id], labels[model_id], topk=(1,))
-
             with torch.cuda.amp.autocast():
                 loss = node.edges(model_id, outputs, labels, epoch)
-
             if loss > 0:
                 node.scaler.scale(loss).backward()
                 node.scaler.step(node.optimizer)
                 node.optimizer.zero_grad()
                 node.scaler.update()
-
+            if type(image) == torch.Tensor:
+                [top1] = node.eval(outputs[model_id], labels[model_id], topk=(1,))
+                node.top1_meter.update(top1.item(), labels[model_id].size(0))
             node.loss_meter.update(loss.item(), labels[model_id].size(0))
-            node.top1_meter.update(top1.item(), labels[model_id].size(0))
 
     def test_on_batch(self, image, label):
-        image = image.cuda()
-        label = label.cuda()
+        if type(image) == torch.Tensor:
+            image = image.cuda()
+            label = label.cuda()
 
-        outputs = []
-        labels = []
-        for node in self.nodes:
-            node.model.eval()
-            with torch.cuda.amp.autocast():
-                with torch.no_grad():
-                    y = node.model(image)
-            outputs.append(y)
-            labels.append(label)
+            outputs = []
+            labels = []
+            for node in self.nodes:
+                node.model.eval()
+                with torch.cuda.amp.autocast():
+                    with torch.no_grad():
+                        y = node.model(image)
+                outputs.append(y)
+                labels.append(label)
 
-        for model_id, node in enumerate(self.nodes):
-            [top1] = accuracy(outputs[model_id], labels[model_id], topk=(1,))
-            node.top1_meter.update(top1.item(), labels[model_id].size(0))
+            for model_id, node in enumerate(self.nodes):
+                [top1] = accuracy(outputs[model_id], labels[model_id], topk=(1,))
+                node.top1_meter.update(top1.item(), labels[model_id].size(0))
 
     def train(self):
         for epoch in range(1, self.max_epoch + 1):

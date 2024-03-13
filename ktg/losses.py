@@ -30,3 +30,26 @@ class KLDivLoss(nn.Module):
         kl = kl.sum(dim=1)
         loss = kl.mean()
         return loss
+
+
+class SSLLoss(nn.Module):
+    def __init__(self):
+        super(SSLLoss, self).__init__()
+
+    def forward(self, target_output, _):
+        loss = target_output[0]
+        return loss
+
+
+class SimSiamLoss(nn.Module):
+    # https://github.com/facebookresearch/simsiam/blob/main/main_simsiam.py#L295
+    def __init__(self):
+        super(SimSiamLoss, self).__init__()
+        # コサイン類似度
+        self.criterion = nn.CosineSimilarity(dim=1)
+        return
+
+    def forward(self, z1, z2, p1, p2):
+        # 負のコサイン類似度の計算
+        loss = -(self.criterion(p1, z2).mean() + self.criterion(p2, z1).mean()) * 0.5
+        return loss
