@@ -3,6 +3,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision
 from torch.nn import init
 
 
@@ -188,4 +189,22 @@ def resnet110(num_classes=10):
         num_classes (uint): number of classes
     """
     model = CifarResNet(ResNetBasicblock, 110, num_classes)
+    return model
+
+
+def resnet18(num_classes=10):
+    model = torchvision.models.resnet18(pretrained=False, num_classes=num_classes)
+    model.conv1 = nn.Conv2d(
+        3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+    )
+    model.maxpool = nn.Identity()
+    return model
+
+
+def resnet34(num_classes=10):
+    model = torchvision.models.resnet34(pretrained=False, num_classes=num_classes)
+    model.conv1 = nn.Conv2d(
+        3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+    )
+    model.maxpool = nn.Identity()
     return model

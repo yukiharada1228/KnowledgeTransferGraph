@@ -51,6 +51,7 @@ class Node:
     loss_meter: AverageMeter
     top1_meter: AverageMeter
     best_top1: float = 0.0
+    eval: nn.Module = accuracy
 
 
 class KnowledgeTransferGraph:
@@ -83,14 +84,17 @@ class KnowledgeTransferGraph:
         for node in self.nodes:
             node.model.train()
             with torch.cuda.amp.autocast():
-                y = node.model(image)
+                if type(image) == list:
+                    y = node.model(image[0], image[1], image[2])
+                else:
+                    y = node.model(image)
             outputs.append(y)
             labels.append(label)
 
         for model_id, node in enumerate(self.nodes):
             with torch.cuda.amp.autocast():
                 loss = node.edges(model_id, outputs, labels, epoch)
-            if loss > 0:
+            if loss != 0:
                 node.scaler.scale(loss).backward()
                 node.scaler.step(node.optimizer)
                 node.optimizer.zero_grad()
@@ -116,7 +120,7 @@ class KnowledgeTransferGraph:
                 labels.append(label)
 
             for model_id, node in enumerate(self.nodes):
-                [top1] = accuracy(outputs[model_id], labels[model_id], topk=(1,))
+                [top1] = node.eval(outputs[model_id], labels[model_id], topk=(1,))
                 node.top1_meter.update(top1.item(), labels[model_id].size(0))
 
     def train(self):
@@ -146,6 +150,8 @@ class KnowledgeTransferGraph:
                 self.test_on_batch(image=image, label=label)
             for model_id, node in enumerate(self.nodes):
                 test_top1 = node.top1_meter.avg
+                if test_top1 == 0.0:
+                    test_top1 = node.eval()
                 node.writer.add_scalar("test_top1", test_top1, epoch)
                 print("model_id: {0:}   top1 :test={1:.3f}".format(model_id, test_top1))
                 if node.best_top1 <= node.top1_meter.avg:

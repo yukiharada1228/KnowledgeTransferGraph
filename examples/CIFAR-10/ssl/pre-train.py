@@ -13,7 +13,7 @@ from ktg.dataset.cifar_datasets.cifar10 import get_datasets
 from ktg.gates import ThroughGate
 from ktg.models import cifar_models
 from ktg.transforms import ssl_transforms
-from ktg.utils import (LARS, AverageMeter, WorkerInitializer,
+from ktg.utils import (LARS, AverageMeter, KNNValidation, WorkerInitializer,
                        get_cosine_schedule_with_warmup, set_seed)
 
 parser = argparse.ArgumentParser()
@@ -94,7 +94,6 @@ nodes = []
 gates = [ThroughGate(max_epoch)]
 model = getattr(models, ssl_name)(encoder_func=getattr(cifar_models, model_name)).cuda()
 criterions = [getattr(losses, "SSLLoss")()]
-model.fc = nn.Identity()
 writer = SummaryWriter(
     f"runs/pre-train/{model_name}/{projector_name}/{transforms_name}/{ssl_name}"
 )
@@ -115,6 +114,12 @@ node = Node(
     edges=edges,
     loss_meter=AverageMeter(),
     top1_meter=AverageMeter(),
+    eval=KNNValidation(
+        model,
+        knn_train_dataset,
+        knn_val_dataset,
+        K=20,
+    ),
 )
 nodes.append(node)
 

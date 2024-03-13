@@ -47,7 +47,6 @@ class SimSiamLoss(nn.Module):
         super(SimSiamLoss, self).__init__()
         # コサイン類似度
         self.criterion = nn.CosineSimilarity(dim=1)
-        return
 
     def forward(self, z1, z2, p1, p2):
         # 負のコサイン類似度の計算

@@ -4,27 +4,31 @@ import torch.nn as nn
 from ktg.losses import SimSiamLoss
 
 
-def SimSiam_projector(input_dim):
-    # https://github.com/facebookresearch/simsiam/blob/main/simsiam/builder.py#L28
-    out_dim = 2048
-    projector = nn.Sequential(
-        nn.Linear(input_dim, input_dim, bias=False),  # Layer1
-        nn.BatchNorm1d(input_dim),
-        nn.ReLU(inplace=True),
-        nn.Linear(input_dim, input_dim, bias=False),  # Layer2
-        nn.BatchNorm1d(input_dim),
-        nn.ReLU(inplace=True),
-        nn.Linear(input_dim, out_dim, bias=False),  # Layer3
-        nn.BatchNorm1d(out_dim, affine=False),
-    )
-    return projector
+class SimSiamProjector(nn.Module):
+    def __init__(self, input_dim, out_dim=2048):
+        super(SimSiamProjector, self).__init__()
+        self.out_dim = out_dim
+        self.projector = nn.Sequential(
+            nn.Linear(input_dim, input_dim, bias=False),
+            nn.BatchNorm1d(input_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(input_dim, input_dim, bias=False),
+            nn.BatchNorm1d(input_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(input_dim, out_dim, bias=False),
+            nn.BatchNorm1d(out_dim, affine=False),
+        )
+
+    def forward(self, x):
+        z = self.projector(x)
+        return z
 
 
 class SimSiam(nn.Module):
     def __init__(
         self,
         encoder_func,
-        projector_func=SimSiam_projector,
+        projector_func=SimSiamProjector,
         proj_out_dim=2048,
         pred_hidden_dim=512,
     ):
