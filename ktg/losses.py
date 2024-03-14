@@ -127,3 +127,32 @@ class SwAVLoss(nn.Module):
             loss += subloss / (np.sum(self.nmb_crops) - 1)
         loss /= len(self.crops_for_assign)
         return loss
+
+
+class BarlowTwinsLoss(nn.Module):
+    # https://github.com/facebookresearch/barlowtwins/blob/main/main.py#L211
+    def __init__(self, batch_size, projector, lambd=0.0051):
+        super(BarlowTwinsLoss, self).__init__()
+        # 損失関数
+        self.batch_size = batch_size
+        self.lambd = lambd
+        self.bn = nn.BatchNorm1d(projector.out_dim, affine=False)
+        return
+
+    def off_diagonal(self, x):
+        # https://github.com/facebookresearch/barlowtwins/blob/main/main.py#L180
+        # return a flattened view of the off-diagonal elements of a square matrix
+        n, m = x.shape
+        assert n == m
+        return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
+
+    def forward(self, z1, z2, p1, p2, **kwargs):
+        # empirical cross-correlation matrix
+        c = self.bn(z1).T @ self.bn(z2)  # バッチ正規化->内積->コサイン類似度
+        c.div_(self.batch_size)
+
+        # 損失を計算
+        on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
+        off_diag = self.off_diagonal(c).pow_(2).sum()
+        loss = on_diag + self.lambd * off_diag
+        return loss

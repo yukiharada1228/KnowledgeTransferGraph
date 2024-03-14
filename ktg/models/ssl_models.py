@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from ktg.losses import SimSiamLoss, SwAVLoss
+from ktg.losses import BarlowTwinsLoss, SimSiamLoss, SwAVLoss
 
 
 class SimSiamProjector(nn.Module):
@@ -34,6 +34,25 @@ class SwAVProjector(nn.Module):
             nn.ReLU(inplace=True),
             nn.Linear(2048, out_dim),
         )  # Layer2
+
+    def forward(self, x):
+        z = self.projector(x)
+        return z
+
+
+class BarlowTwinsProjector(nn.Module):
+    def __init__(self, input_dim, out_dim=8192):
+        super(BarlowTwinsProjector, self).__init__()
+        self.out_dim = out_dim
+        self.projector = nn.Sequential(
+            nn.Linear(input_dim, 8192, bias=False),  # Layer1
+            nn.BatchNorm1d(8192),
+            nn.ReLU(inplace=True),
+            nn.Linear(8192, 8192, bias=False),  # Layer2
+            nn.BatchNorm1d(8192, affine=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(8192, out_dim, bias=False),
+        )  # Layer3
 
     def forward(self, x):
         z = self.projector(x)
@@ -76,7 +95,7 @@ class SimSiam(nn.Module):
     def projector_features(self, x):
         return self.projector(self.encoder(x))
 
-    def forward(self, x1, x2, _):  # x1:torch.Tensor, x2:torch.Tensor, x3:list
+    def forward(self, x1, x2, _):  # x1:torch.Tensor, x2:torch.Tensor, x3:None
         h1 = self.encoder(x1)
         h2 = self.encoder(x2)
 
@@ -163,3 +182,37 @@ class SwAV(nn.Module):
             nn.functional.normalize(z1, dim=1, p=2).detach(), None, p1, None
         )
         return [loss, z1[0:batch_size], z1[batch_size : batch_size * 2]]
+
+
+class BarlowTwins(nn.Module):
+    def __init__(self, encoder_func, batch_size, projector_func=BarlowTwinsProjector):
+        super(BarlowTwins, self).__init__()
+
+        # ネットワークの用意
+        self.encoder = encoder_func()
+        self.input_dim = self.encoder.fc.in_features
+        self.encoder.fc = nn.Identity()
+
+        # projector(MLP)の用意
+        self.projector = projector_func(input_dim=self.input_dim)
+
+        # 自己教師あり学習の損失
+        self.criterion = BarlowTwinsLoss(batch_size, self.projector)
+
+    @torch.no_grad()
+    def encoder_features(self, x):
+        return self.encoder(x)
+
+    @torch.no_grad()
+    def projector_features(self, x):
+        return self.projector(self.encoder(x))
+
+    def forward(self, x1, x2, _):  # x1:torch.Tensor, x2:torch.Tensor, x3:None
+        h1 = self.encoder(x1)
+        h2 = self.encoder(x2)
+
+        z1 = self.projector(h1)
+        z2 = self.projector(h2)
+
+        loss = self.criterion(z1, z2, None, None)
+        return [loss, z1, z2]

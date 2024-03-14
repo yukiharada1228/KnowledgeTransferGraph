@@ -76,6 +76,7 @@ class KnowledgeTransferGraph:
         if type(image) == list:
             if len(image) == 2:
                 image = [img.cuda() for img in image]
+                image.append(None)
             elif len(image) == 3:
                 image = [
                     image[0].cuda(),
