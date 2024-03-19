@@ -3,25 +3,23 @@ import argparse
 from copy import deepcopy
 
 import torch
-import torch.nn as nn
+from ktg import Edges, KnowledgeTransferGraph, Node, losses
+from ktg.dataset.cifar_datasets.cifar10 import get_datasets
+from ktg.gates import ThroughGate
+from ktg.models import cifar_models, projector, ssl_models
+from ktg.transforms import ssl_transforms
+from ktg.utils import (LARS, AverageMeter, KNNValidation, WorkerInitializer,
+                       get_cosine_schedule_with_warmup, set_seed)
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 
-from ktg import Edges, KnowledgeTransferGraph, Node, losses, models
-from ktg.dataset.cifar_datasets.cifar10 import get_datasets
-from ktg.gates import ThroughGate
-from ktg.models import cifar_models
-from ktg.transforms import ssl_transforms
-from ktg.utils import (LARS, AverageMeter, KNNValidation, WorkerInitializer,
-                       get_cosine_schedule_with_warmup, set_seed)
-
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
 parser.add_argument("--model", default="resnet18")
-parser.add_argument("--ssl", default="SimSiam")
-parser.add_argument("--transforms", default="SimSiam")
-parser.add_argument("--projector", default="SimSiam")
+parser.add_argument("--ssl", default="SimCLR")
+parser.add_argument("--transforms", default="DINO")
+parser.add_argument("--projector", default="BarlowTwins")
 
 args = parser.parse_args()
 manualSeed = args.seed
@@ -92,8 +90,10 @@ scheduler_setting = {
 
 nodes = []
 gates = [ThroughGate(max_epoch)]
-model = getattr(models, ssl_name)(
-    encoder_func=getattr(cifar_models, model_name), batch_size=batch_size
+model = getattr(ssl_models, ssl_name)(
+    encoder_func=getattr(cifar_models, model_name),
+    batch_size=batch_size,
+    projector_func=getattr(projector, f"{projector_name}Projector"),
 ).cuda()
 criterions = [getattr(losses, "SSLLoss")()]
 writer = SummaryWriter(
