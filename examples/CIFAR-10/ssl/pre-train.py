@@ -33,7 +33,8 @@ projector_name = args.projector
 set_seed(manual_seed)
 
 # Prepare the CIFAR-10 for training
-batch_size = 512
+accumulation_steps = 2**2
+batch_size = 512 // accumulation_steps
 num_workers = 10
 
 train_dataset, val_dataset, _ = get_datasets()
@@ -131,5 +132,6 @@ graph = KnowledgeTransferGraph(
     max_epoch=max_epoch,
     train_dataloader=train_dataloader,
     test_dataloader=val_dataloader,
+    accumulation_steps=accumulation_steps,
 )
 graph.train()

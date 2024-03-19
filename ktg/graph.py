@@ -59,6 +59,7 @@ class KnowledgeTransferGraph:
         self,
         nodes: list[Node],
         max_epoch: int,
+        accumulation_steps: int,
         train_dataloader: DataLoader,
         test_dataloader: DataLoader,
         trial=None,
@@ -68,11 +69,13 @@ class KnowledgeTransferGraph:
         for node in nodes:
             os.makedirs(node.save_dir, exist_ok=True)
         self.max_epoch = max_epoch
+        self.accumulation_steps = accumulation_steps
         self.train_dataloader = train_dataloader
         self.test_dataloader = test_dataloader
         self.trial = trial
+        self.data_length = len(self.train_dataloader)
 
-    def train_on_batch(self, image, label, epoch):
+    def train_on_batch(self, image, label, epoch, num_iter):
         if type(image) == list:
             if len(image) == 2:
                 image = [img.cuda() for img in image]
@@ -105,10 +108,13 @@ class KnowledgeTransferGraph:
             with torch.cuda.amp.autocast():
                 loss = node.edges(model_id, outputs, labels, epoch)
             if loss != 0:
-                node.scaler.scale(loss).backward()
-                node.scaler.step(node.optimizer)
-                node.optimizer.zero_grad()
-                node.scaler.update()
+                node.scaler.scale(loss / self.accumulation_steps).backward()
+                if ((num_iter + 1) % self.accumulation_steps == 0) or (
+                    (num_iter + 1) == self.data_length
+                ):
+                    node.scaler.step(node.optimizer)
+                    node.optimizer.zero_grad()
+                    node.scaler.update()
             if type(image) == torch.Tensor:
                 [top1] = node.eval(outputs[model_id], labels[model_id], topk=(1,))
                 node.top1_meter.update(top1.item(), labels[model_id].size(0))
@@ -138,8 +144,10 @@ class KnowledgeTransferGraph:
             print("epoch %d" % epoch)
             start_time = time.time()
 
-            for image, label in self.train_dataloader:
-                self.train_on_batch(image=image, label=label, epoch=epoch - 1)
+            for idx, (image, label) in enumerate(self.train_dataloader):
+                self.train_on_batch(
+                    image=image, label=label, epoch=epoch - 1, num_iter=idx
+                )
             for model_id, node in enumerate(self.nodes):
                 train_lr = node.optimizer.param_groups[0]["lr"]
                 train_loss = node.loss_meter.avg

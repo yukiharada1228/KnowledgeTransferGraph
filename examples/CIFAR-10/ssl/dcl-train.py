@@ -55,7 +55,8 @@ def objective(trial):
     set_seed(manual_seed)
 
     # Prepare the CIFAR-10 for training
-    batch_size = 512
+    accumulation_steps = 2**1
+    batch_size = 512 // accumulation_steps
     num_workers = 10
 
     train_dataset, val_dataset, _ = get_datasets()
@@ -176,6 +177,7 @@ def objective(trial):
         max_epoch=max_epoch,
         train_dataloader=train_dataloader,
         test_dataloader=val_dataloader,
+        accumulation_steps=accumulation_steps,
     )
     best_top1 = graph.train()
     return best_top1
