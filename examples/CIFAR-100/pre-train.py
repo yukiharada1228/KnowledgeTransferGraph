@@ -3,13 +3,14 @@ import argparse
 
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+
 from ktg import Edges, KnowledgeTransferGraph, Node
 from ktg.dataset.cifar_datasets.cifar100 import get_datasets
 from ktg.gates import ThroughGate
 from ktg.models import cifar_models
 from ktg.utils import AverageMeter, WorkerInitializer, set_seed
-from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)

@@ -5,15 +5,16 @@ import os
 import optuna
 import torch
 import torch.nn as nn
+from optuna.storages import JournalFileStorage, JournalStorage
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+
 from ktg import Edges, KnowledgeTransferGraph, Node, gates
 from ktg.dataset.cifar_datasets.cifar100 import get_datasets
 from ktg.losses import KLDivLoss
 from ktg.models import cifar_models
 from ktg.utils import (AverageMeter, WorkerInitializer, load_checkpoint,
                        set_seed)
-from optuna.storages import JournalFileStorage, JournalStorage
-from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
