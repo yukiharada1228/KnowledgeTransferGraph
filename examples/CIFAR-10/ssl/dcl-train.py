@@ -22,7 +22,8 @@ parser.add_argument("--n_trials", default=1500)
 parser.add_argument("--models", default=["resnet18"])
 parser.add_argument(
     "--gates",
-    default=["ThroughGate", "CutoffGate"],
+    # default=["ThroughGate", "CutoffGate"],
+    default=["ThroughGate"],
 )
 parser.add_argument(
     "--ssls",
@@ -116,7 +117,7 @@ def objective(trial):
         criterions = []
         for j in range(num_nodes):
             if i == j:
-                loss_name = trial.suggest_categorical(f"{i}_{j}_loss", ["SSLoss"])
+                loss_name = trial.suggest_categorical(f"{i}_{j}_loss", ["SSLLoss"])
             else:
                 loss_name = trial.suggest_categorical(f"{i}_{j}_loss", kds_name)
             criterions.append(getattr(losses, loss_name)())
