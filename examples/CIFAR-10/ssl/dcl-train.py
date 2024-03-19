@@ -127,10 +127,7 @@ def objective(trial):
             model_name = models_name[0]
         else:
             model_name = trial.suggest_categorical(f"{i}_model", models_name)
-        ssl_name = trial.suggest_categorical(
-            f"{i}_ssl",
-            ssls_name,
-        )
+        ssl_name = trial.suggest_categorical(f"{i}_ssl", ssls_name)
         model = getattr(ssl_models, ssl_name)(
             encoder_func=getattr(cifar_models, model_name),
             batch_size=batch_size,
