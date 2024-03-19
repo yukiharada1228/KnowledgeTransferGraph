@@ -19,11 +19,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
 parser.add_argument("--num-nodes", default=3)
 parser.add_argument("--n_trials", default=1500)
-parser.add_argument(
-    "--models", 
-    # default=["resnet18", "resnet34", "resnet50"],
-    default=["resnet18"],
-)
+parser.add_argument("--models", default=["resnet18"])
 parser.add_argument(
     "--gates",
     default=["ThroughGate", "CutoffGate", "PositiveGammaGate", "NegativeGammaGate"],
