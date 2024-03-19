@@ -344,3 +344,26 @@ class DINOLoss(nn.Module):
         t_loss /= n_loss_terms
         self.update_center(teacher_output)
         return t_loss
+
+
+class MSELoss(nn.Module):
+    def __init__(self):
+        super(MSELoss, self).__init__()
+        # 損失関数
+        self.criterion = nn.MSELoss()
+
+    def forward(self, target_output, source_output):
+        # モデル1の特徴ベクトル
+        z1_m1 = target_output[1]
+        z2_m1 = target_output[2]
+        # モデル2の特徴ベクトル
+        z1_m2 = source_output[1].detach()
+        z2_m2 = source_output[2].detach()
+
+        # 特徴ベクトル(Projector)に関する知識転移1 : DisCOベース (同じサンプルに対する特徴量の違い)
+        #   出力の統合 -> [バッチ*2,次元数]
+        fvec_m1 = torch.cat((z1_m1, z2_m1), dim=0)
+        fvec_m2 = torch.cat((z1_m2, z2_m2), dim=0)
+        #   損失計算
+        loss = self.criterion(fvec_m1, fvec_m2.detach())
+        return loss

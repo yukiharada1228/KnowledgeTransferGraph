@@ -1,0 +1,209 @@
+# Import packages
+import argparse
+from copy import deepcopy
+
+import torch
+from ktg import Edges, KnowledgeTransferGraph, Node, gates
+from ktg.dataset.cifar_datasets.cifar10 import get_datasets
+from ktg.losses import MSELoss, SSLLoss
+from ktg.models import cifar_models, projector, ssl_models
+from ktg.transforms import ssl_transforms
+from ktg.utils import (LARS, AverageMeter, KNNValidation, WorkerInitializer,
+                       get_cosine_schedule_with_warmup, load_checkpoint,
+                       set_seed)
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+from torchvision import transforms
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--seed", default=42)
+parser.add_argument("--num-nodes", default=3)
+parser.add_argument("--n_trials", default=1500)
+parser.add_argument("--models", default=["resnet18", "resnet34", "resnet50"])
+parser.add_argument(
+    "--gates",
+    default=["ThroughGate", "CutoffGate", "PositiveGammaGate", "NegativeGammaGate"],
+)
+parser.add_argument(
+    "--ssls",
+    default=["SimCLR", "MoCo", "SimSiam", "BYOL", "SwAV", "BarlowTwins", "DINO"],
+)
+parser.add_argument("--transforms", default="DINO")
+parser.add_argument("--projector", default="BarlowTwins")
+
+args = parser.parse_args()
+manual_seed = args.seed
+num_nodes = args.num_nodes
+n_trials = args.n_trials
+models_name = args.models
+gates_name = args.gates
+ssls_name = args.ssls
+transforms_name = args.transforms
+projector_name = args.projector
+
+
+def objective(trial):
+    # Fix the seed value
+    set_seed(manual_seed)
+
+    # Prepare the CIFAR-10 for training
+    batch_size = 512
+    num_workers = 10
+
+    train_dataset, val_dataset, _ = get_datasets()
+    transform = getattr(ssl_transforms, f"{transforms_name}Transforms")()
+    train_dataset.transform = transform
+    val_dataset.transform = transform
+
+    knn_train_dataset = deepcopy(train_dataset)
+    knn_val_dataset = deepcopy(val_dataset)
+    knn_train_dataset.transform = transforms.ToTensor()
+    knn_val_dataset.transform = transforms.ToTensor()
+
+    train_dataloader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+        drop_last=True,
+        worker_init_fn=WorkerInitializer(manual_seed).worker_init_fn,
+    )
+    val_dataloader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+        drop_last=False,
+        worker_init_fn=WorkerInitializer(manual_seed).worker_init_fn,
+    )
+
+    # Prepare for training
+    max_epoch = 800
+
+    optim_setting = {
+        "name": "LARS",
+        "args": {
+            "lr": 0.3 * (batch_size / 256),
+            "weight_decay": 10e-6,
+            "momentum": 0.9,
+            "eta": 0.001,
+            "weight_decay_filter": False,
+            "lars_adaptation_filter": False,
+        },
+    }
+    scheduler_setting = {
+        "name": "get_cosine_schedule_with_warmup",
+        "args": {
+            "num_warmup_steps": 10,
+            "num_training_steps": max_epoch,
+            "num_cycles": 0.5,
+            "last_epoch": -1,
+        },
+    }
+
+    nodes = []
+    for i in range(num_nodes):
+        gates_list = []
+        criterions = []
+        for j in range(num_nodes):
+            if i == j:
+                criterions.append(SSLLoss())
+            else:
+                criterions.append(MSELoss())
+            gate_name = trial.suggest_categorical(
+                f"{i}_{j}_gate",
+                gates_name,
+            )
+            gamma = trial.suggest_float(f"{i}_{j}_gamma", 0.01, 100, log=True)
+            if "GammaGate" in gate_name:
+                gate = getattr(gates, gate_name)(max_epoch, gamma)
+            else:
+                gate = getattr(gates, gate_name)(max_epoch)
+            gates_list.append(gate)
+        if i == 0:
+            model_name = models_name[0]
+        else:
+            model_name = trial.suggest_categorical(f"{i}_model", models_name)
+        ssl_name = trial.suggest_categorical(
+            f"{i}_{j}_ssl",
+            ssls_name,
+        )
+        model = getattr(ssl_models, ssl_name)(
+            encoder_func=getattr(cifar_models, model_name),
+            batch_size=batch_size,
+            projector_func=getattr(projector, f"{projector_name}Projector"),
+        ).cuda()
+        if (
+            all(gate.__class__.__name__ == "CutoffGate" for gate in gates_list)
+            and i != 0
+        ):
+            load_checkpoint(
+                model=model,
+                save_dir=f"checkpoint/pre-train/{model_name}/{projector_name}/{transforms_name}/{ssl_name}",
+                is_best=True,
+            )
+        writer = SummaryWriter(
+            f"runs/dcl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}"
+        )
+        save_dir = f"checkpoint/dcl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}"
+        optimizer = LARS(model.parameters(), **optim_setting["args"])
+        scheduler = get_cosine_schedule_with_warmup(
+            optimizer, **scheduler_setting["args"]
+        )
+        edges = Edges(criterions, gates=gates_list)
+
+        node = Node(
+            model=model,
+            writer=writer,
+            scaler=torch.cuda.amp.GradScaler(),
+            save_dir=save_dir,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            edges=edges,
+            loss_meter=AverageMeter(),
+            top1_meter=AverageMeter(),
+            eval=KNNValidation(
+                model,
+                knn_train_dataset,
+                knn_val_dataset,
+                K=20,
+            ),
+        )
+        nodes.append(node)
+
+    graph = KnowledgeTransferGraph(
+        nodes=nodes,
+        max_epoch=max_epoch,
+        train_dataloader=train_dataloader,
+        test_dataloader=val_dataloader,
+    )
+    best_top1 = graph.train()
+    return best_top1
+
+
+if __name__ == "__main__":
+
+    import os
+
+    import optuna
+    from optuna.storages import JournalFileStorage, JournalStorage
+
+    # Cteate study object
+    study_name = f"dcl_{num_nodes}"
+    optuna_dir = f"optuna/{study_name}"
+    os.makedirs(optuna_dir, exist_ok=True)
+    storage = JournalStorage(JournalFileStorage(os.path.join(optuna_dir, "optuna.log")))
+    sampler = optuna.samplers.TPESampler(multivariate=True)
+    pruner = optuna.pruners.SuccessiveHalvingPruner()
+    study = optuna.create_study(
+        storage=storage,
+        study_name=study_name,
+        sampler=sampler,
+        pruner=pruner,
+        direction="maximize",
+        load_if_exists=True,
+    )
+    # Start optimization
+    study.optimize(objective, n_trials=n_trials)

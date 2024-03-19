@@ -22,14 +22,14 @@ parser.add_argument("--transforms", default="DINO")
 parser.add_argument("--projector", default="BarlowTwins")
 
 args = parser.parse_args()
-manualSeed = args.seed
+manual_seed = args.seed
 model_name = args.model
 ssl_name = args.ssl
 transforms_name = args.transforms
 projector_name = args.projector
 
 # Fix the seed value
-set_seed(manualSeed)
+set_seed(manual_seed)
 
 # Prepare the CIFAR-10 for training
 batch_size = 512
@@ -52,7 +52,7 @@ train_dataloader = DataLoader(
     num_workers=num_workers,
     pin_memory=True,
     drop_last=True,
-    worker_init_fn=WorkerInitializer(manualSeed).worker_init_fn,
+    worker_init_fn=WorkerInitializer(manual_seed).worker_init_fn,
 )
 val_dataloader = DataLoader(
     val_dataset,
@@ -61,7 +61,7 @@ val_dataloader = DataLoader(
     num_workers=num_workers,
     pin_memory=True,
     drop_last=False,
-    worker_init_fn=WorkerInitializer(manualSeed).worker_init_fn,
+    worker_init_fn=WorkerInitializer(manual_seed).worker_init_fn,
 )
 
 # Prepare for training
