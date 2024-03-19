@@ -3,17 +3,17 @@ import argparse
 from copy import deepcopy
 
 import torch
-from ktg import Edges, KnowledgeTransferGraph, Node, gates
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+from torchvision import transforms
+
+from ktg import Edges, KnowledgeTransferGraph, Node, gates, losses
 from ktg.dataset.cifar_datasets.cifar10 import get_datasets
-from ktg.losses import MSELoss, SSLLoss
 from ktg.models import cifar_models, projector, ssl_models
 from ktg.transforms import ssl_transforms
 from ktg.utils import (LARS, AverageMeter, KNNValidation, WorkerInitializer,
                        get_cosine_schedule_with_warmup, load_checkpoint,
                        set_seed)
-from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
-from torchvision import transforms
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
@@ -22,12 +22,17 @@ parser.add_argument("--n_trials", default=1500)
 parser.add_argument("--models", default=["resnet18"])
 parser.add_argument(
     "--gates",
-    default=["ThroughGate", "CutoffGate", "PositiveGammaGate", "NegativeGammaGate"],
+    default=["ThroughGate", "CutoffGate"],
 )
 parser.add_argument(
     "--ssls",
     # default=["SimCLR", "MoCo", "SimSiam", "BYOL", "SwAV", "BarlowTwins", "DINO"],
     default=["DINO"],
+)
+parser.add_argument(
+    "--kds",
+    # default=["MSELoss", "KLLoss"],
+    default=["KLLoss"],
 )
 parser.add_argument("--transforms", default="DINO")
 parser.add_argument("--projector", default="BarlowTwins")
@@ -39,6 +44,7 @@ n_trials = args.n_trials
 models_name = args.models
 gates_name = args.gates
 ssls_name = args.ssls
+kds_name = args.kds
 transforms_name = args.transforms
 projector_name = args.projector
 
@@ -110,19 +116,12 @@ def objective(trial):
         criterions = []
         for j in range(num_nodes):
             if i == j:
-                criterions.append(SSLLoss())
+                loss_name = trial.suggest_categorical(f"{i}_{j}_loss", ["SSLoss"])
             else:
-                criterions.append(MSELoss())
-            gate_name = trial.suggest_categorical(
-                f"{i}_{j}_gate",
-                gates_name,
-            )
-            gamma = trial.suggest_float(f"{i}_{j}_gamma", 0.01, 100, log=True)
-            if "GammaGate" in gate_name:
-                gate = getattr(gates, gate_name)(max_epoch, gamma)
-            else:
-                gate = getattr(gates, gate_name)(max_epoch)
-            gates_list.append(gate)
+                loss_name = trial.suggest_categorical(f"{i}_{j}_loss", kds_name)
+            criterions.append(getattr(losses, loss_name)())
+            gate_name = trial.suggest_categorical(f"{i}_{j}_gate", gates_name)
+            gates_list.append(getattr(gates, gate_name)(max_epoch))
         if i == 0:
             model_name = models_name[0]
         else:

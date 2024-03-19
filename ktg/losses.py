@@ -367,3 +367,29 @@ class MSELoss(nn.Module):
         #   損失計算
         loss = self.criterion(fvec_m1, fvec_m2.detach())
         return loss
+
+
+class KLLoss(nn.Module):
+    def __init__(self):
+        super(KLLoss, self).__init__()
+        # 損失関数
+        self.criterion = nn.CosineSimilarity(dim=2)
+
+    def forward(self, target_output, source_output):
+        # モデル1の特徴ベクトル
+        z1_m1 = target_output[1]
+        z2_m1 = target_output[2]
+        # モデル2の特徴ベクトル
+        z1_m2 = source_output[1].detach()
+        z2_m2 = source_output[2].detach()
+
+        # 特徴ベクトル(Projector)に関する知識転移2 : DoGoベース (サンプル間の関係性)
+        #   View1とView2間の特徴量の類似度における全ての組み合わせを計算
+        sim_m1 = self.criterion(z1_m1.unsqueeze(1), z2_m1.unsqueeze(0))
+        sim_m2 = self.criterion(z1_m2.unsqueeze(1), z2_m2.unsqueeze(0))
+        #   特徴量間の類似度関係を確率分布で表現
+        prob_m1 = F.softmax(sim_m1 / self.T, dim=1)
+        prob_m2 = F.softmax(sim_m2 / self.T, dim=1)
+        #   損失計算
+        loss = F.kl_div(prob_m1.log(), prob_m2.detach(), reduction="batchmean")
+        return loss
