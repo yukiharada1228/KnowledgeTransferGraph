@@ -302,7 +302,7 @@ class SwAV(nn.Module):
         encoder_func,
         batch_size,
         projector_func=SwAVProjector,
-        nmb_prototypes=30,
+        nmb_prototypes=3000,
     ):
         super(SwAV, self).__init__()
         # 自己教師あり学習の損失
