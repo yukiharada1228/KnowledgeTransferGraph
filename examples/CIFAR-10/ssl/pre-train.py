@@ -18,9 +18,9 @@ from ktg.utils import (LARS, AverageMeter, KNNValidation, WorkerInitializer,
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
 parser.add_argument("--model", default="resnet18")
-parser.add_argument("--ssl", default="SimCLR")
-parser.add_argument("--transforms", default="SwAV")
-parser.add_argument("--projector", default="BarlowTwins")
+parser.add_argument("--ssl", default="DINO")
+parser.add_argument("--transforms", default="DINO")
+parser.add_argument("--projector", default="DINO")
 
 args = parser.parse_args()
 manual_seed = args.seed

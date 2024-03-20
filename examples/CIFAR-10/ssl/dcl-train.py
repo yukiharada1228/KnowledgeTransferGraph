@@ -27,16 +27,16 @@ parser.add_argument(
 )
 parser.add_argument(
     "--ssls",
-    # default=["SimCLR", "MoCo", "SimSiam", "BYOL", "SwAV", "BarlowTwins"],
-    default=["SwAV"],
+    # default=["SimCLR", "MoCo", "SimSiam", "BYOL", "SwAV", "BarlowTwins", "DINO"],
+    default=["DINO"],
 )
 parser.add_argument(
     "--kds",
     # default=["MSELoss", "KLLoss"],
     default=["KLLoss"],
 )
-parser.add_argument("--transforms", default="SwAV")
-parser.add_argument("--projector", default="BarlowTwins")
+parser.add_argument("--transforms", default="DINO")
+parser.add_argument("--projector", default="DINO")
 
 args = parser.parse_args()
 manual_seed = args.seed
