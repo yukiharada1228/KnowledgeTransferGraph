@@ -17,7 +17,7 @@ from ktg.utils import (LARS, AverageMeter, KNNValidation, WorkerInitializer,
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
-parser.add_argument("--num-nodes", default=3)
+parser.add_argument("--num-nodes", default=7)
 parser.add_argument("--n_trials", default=1500)
 parser.add_argument("--models", default=["resnet18"])
 parser.add_argument(
@@ -27,15 +27,15 @@ parser.add_argument(
 )
 parser.add_argument(
     "--ssls",
-    # default=["SimCLR", "MoCo", "SimSiam", "BYOL", "SwAV", "BarlowTwins", "DINO"],
-    default=["DINO"],
+    # default=["SimCLR", "MoCo", "SimSiam", "BYOL", "SwAV", "BarlowTwins"],
+    default=["SwAV"],
 )
 parser.add_argument(
     "--kds",
     # default=["MSELoss", "KLLoss"],
     default=["KLLoss"],
 )
-parser.add_argument("--transforms", default="DINO")
+parser.add_argument("--transforms", default="SwAV")
 parser.add_argument("--projector", default="BarlowTwins")
 
 args = parser.parse_args()
@@ -55,7 +55,7 @@ def objective(trial):
     set_seed(manual_seed)
 
     # Prepare the CIFAR-10 for training
-    accumulation_steps = 2**1
+    accumulation_steps = 2**4
     batch_size = 512 // accumulation_steps
     num_workers = 10
 
@@ -94,7 +94,7 @@ def objective(trial):
     optim_setting = {
         "name": "LARS",
         "args": {
-            "lr": 0.3 * (batch_size / 256),
+            "lr": 0.3 * (batch_size * accumulation_steps / 256),
             "weight_decay": 10e-6,
             "momentum": 0.9,
             "eta": 0.001,

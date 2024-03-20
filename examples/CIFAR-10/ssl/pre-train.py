@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
 parser.add_argument("--model", default="resnet18")
 parser.add_argument("--ssl", default="SimCLR")
-parser.add_argument("--transforms", default="DINO")
+parser.add_argument("--transforms", default="SwAV")
 parser.add_argument("--projector", default="BarlowTwins")
 
 args = parser.parse_args()
@@ -33,7 +33,7 @@ projector_name = args.projector
 set_seed(manual_seed)
 
 # Prepare the CIFAR-10 for training
-accumulation_steps = 2**2
+accumulation_steps = 2**4
 batch_size = 512 // accumulation_steps
 num_workers = 10
 
@@ -72,7 +72,7 @@ max_epoch = 800
 optim_setting = {
     "name": "LARS",
     "args": {
-        "lr": 0.3 * (batch_size / 256),
+        "lr": 0.3 * (batch_size * accumulation_steps / 256),
         "weight_decay": 10e-6,
         "momentum": 0.9,
         "eta": 0.001,

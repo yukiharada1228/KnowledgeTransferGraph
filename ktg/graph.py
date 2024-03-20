@@ -31,9 +31,7 @@ class Edges(nn.Module):
             if i == model_id:
                 loss = gate(criterion(target_output, label), epoch)
             elif gate.__class__.__name__ != "CutoffGate":
-                losses += [
-                    gate(criterion(target_output, source_output.detach()), epoch)
-                ]
+                losses += [gate(criterion(target_output, source_output), epoch)]
         if len(losses) > 0:
             loss = loss + torch.stack(losses).mean()
         return loss
@@ -107,14 +105,14 @@ class KnowledgeTransferGraph:
         for model_id, node in enumerate(self.nodes):
             with torch.cuda.amp.autocast():
                 loss = node.edges(model_id, outputs, labels, epoch)
-            if loss != 0:
-                node.scaler.scale(loss / self.accumulation_steps).backward()
-                if ((num_iter + 1) % self.accumulation_steps == 0) or (
-                    (num_iter + 1) == self.data_length
-                ):
-                    node.scaler.step(node.optimizer)
-                    node.optimizer.zero_grad()
-                    node.scaler.update()
+                if loss != 0:
+                    node.scaler.scale(loss / self.accumulation_steps).backward()
+                    if ((num_iter + 1) % self.accumulation_steps == 0) or (
+                        (num_iter + 1) == self.data_length
+                    ):
+                        node.scaler.step(node.optimizer)
+                        node.optimizer.zero_grad()
+                        node.scaler.update()
             if type(image) == torch.Tensor:
                 [top1] = node.eval(outputs[model_id], labels[model_id], topk=(1,))
                 node.top1_meter.update(top1.item(), labels[model_id].size(0))

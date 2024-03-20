@@ -13,7 +13,7 @@ class CrossEntropySoftTargetLoss(nn.Module):
 
     def forward(self, y_pred, y_gt):
         y_pred_soft = y_pred / self.T
-        y_gt_soft = y_gt / self.T
+        y_gt_soft = y_gt.detach() / self.T
         return self.criterion(y_pred_soft, self.softmax(y_gt_soft)) * (self.T**2)
 
 
@@ -24,7 +24,7 @@ class KLDivLoss(nn.Module):
 
     def forward(self, y_pred, y_gt):
         y_pred_soft = self.softmax(y_pred)
-        y_gt_soft = self.softmax(y_gt)
+        y_gt_soft = self.softmax(y_gt.detach())
         return self.kl_divergence(y_pred_soft, y_gt_soft)
 
     def kl_divergence(self, student, teacher):
@@ -268,7 +268,7 @@ class BarlowTwinsLoss(nn.Module):
         assert n == m
         return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
 
-    def forward(self, z1, z2, _p1, _p2, **kwargs):
+    def forward(self, z1, z2, _p1, _p2):
         # empirical cross-correlation matrix
         c = self.bn(z1).T @ self.bn(z2)  # バッチ正規化->内積->コサイン類似度
         c.div_(self.batch_size)
@@ -370,10 +370,11 @@ class MSELoss(nn.Module):
 
 
 class KLLoss(nn.Module):
-    def __init__(self):
+    def __init__(self, T=0.1):
         super(KLLoss, self).__init__()
         # 損失関数
         self.criterion = nn.CosineSimilarity(dim=2)
+        self.T = T
 
     def forward(self, target_output, source_output):
         # モデル1の特徴ベクトル
