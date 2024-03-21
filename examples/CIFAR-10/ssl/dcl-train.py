@@ -36,7 +36,7 @@ parser.add_argument(
     default=["KLLoss"],
 )
 parser.add_argument("--transforms", default="DINO")
-parser.add_argument("--projector", default="DINO")
+parser.add_argument("--projector", default="SwAV")
 
 args = parser.parse_args()
 manual_seed = args.seed
@@ -55,7 +55,7 @@ def objective(trial):
     set_seed(manual_seed)
 
     # Prepare the CIFAR-10 for training
-    accumulation_steps = 2**4
+    accumulation_steps = 2**2
     batch_size = 512 // accumulation_steps
     num_workers = 10
 
