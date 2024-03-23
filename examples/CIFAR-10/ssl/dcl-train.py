@@ -21,12 +21,12 @@ parser.add_argument("--num-nodes", default=3)
 parser.add_argument("--n_trials", default=1500)
 parser.add_argument(
     "--models", 
-    # default=["resnet18", "resnet34", "resnet50"],
-    default=["resnet18"],
+    # default=["resnet18", "resnet32", "resnet50"],
+    default=["resnet50"],
 )
 parser.add_argument(
     "--gates",
-    # default=["ThroughGate", "CutoffGate", "PositiveLinearGate", "NegativeLinearGate"],
+    # default=["ThroughGate", "CutoffGate"],
     default=["ThroughGate"],
 )
 parser.add_argument(
