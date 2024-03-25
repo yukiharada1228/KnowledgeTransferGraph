@@ -57,4 +57,4 @@ def get_datasets():
     test_dataset = datasets.CIFAR10(
         root="data", train=True, download=True, transform=test_transform
     )
-    return train_dataset, val_dataset, dataset, test_dataset
+    return train_dataset, val_dataset, test_dataset
