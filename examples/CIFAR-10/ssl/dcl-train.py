@@ -3,10 +3,6 @@ import argparse
 from copy import deepcopy
 
 import torch
-from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
-from torchvision import transforms
-
 from ktg import Edges, KnowledgeTransferGraph, Node, gates, losses
 from ktg.dataset.cifar_datasets.cifar10 import get_datasets
 from ktg.models import cifar_models, projector, ssl_models
@@ -14,13 +10,16 @@ from ktg.transforms import ssl_transforms
 from ktg.utils import (LARS, AverageMeter, KNNValidation, WorkerInitializer,
                        get_cosine_schedule_with_warmup, load_checkpoint,
                        set_seed)
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+from torchvision import transforms
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
 parser.add_argument("--num-nodes", default=3)
 parser.add_argument("--n_trials", default=1500)
 parser.add_argument(
-    "--models", 
+    "--models",
     # default=["resnet18", "resnet34", "resnet50"],
     default=["resnet50"],
 )
