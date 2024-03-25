@@ -3,6 +3,10 @@ import argparse
 from copy import deepcopy
 
 import torch
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+from torchvision import transforms
+
 from ktg import Edges, KnowledgeTransferGraph, Node, gates, losses
 from ktg.dataset.cifar_datasets.cifar10 import get_datasets
 from ktg.models import cifar_models, projector, ssl_models
@@ -10,9 +14,6 @@ from ktg.transforms import ssl_transforms
 from ktg.utils import (LARS, AverageMeter, KNNValidation, WorkerInitializer,
                        get_cosine_schedule_with_warmup, load_checkpoint,
                        set_seed)
-from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
-from torchvision import transforms
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
@@ -62,7 +63,7 @@ def objective(trial):
     batch_size = 512 // accumulation_steps
     num_workers = 10
 
-    train_dataset, val_dataset, _ = get_datasets()
+    train_dataset, val_dataset, _, _ = get_datasets()
     transform = getattr(ssl_transforms, f"{transforms_name}Transforms")()
     train_dataset.transform = transform
     val_dataset.transform = transform
