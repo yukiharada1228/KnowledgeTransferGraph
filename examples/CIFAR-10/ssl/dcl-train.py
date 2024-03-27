@@ -17,7 +17,7 @@ from ktg.utils import (LARS, AverageMeter, KNNValidation, WorkerInitializer,
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
-parser.add_argument("--num-nodes", default=3)
+parser.add_argument("--num-nodes", default=7)
 parser.add_argument("--n_trials", default=1500)
 parser.add_argument(
     "--models",
@@ -39,9 +39,9 @@ parser.add_argument("--transforms", default="DINO")
 parser.add_argument("--projector", default="SwAV")
 
 args = parser.parse_args()
-manual_seed = args.seed
-num_nodes = args.num_nodes
-n_trials = args.n_trials
+manual_seed = int(args.seed)
+num_nodes = int(args.num_nodes)
+n_trials = int(args.n_trials)
 models_name = args.models
 gates_name = args.gates
 ssls_name = args.ssls
@@ -178,6 +178,7 @@ def objective(trial):
         train_dataloader=train_dataloader,
         test_dataloader=val_dataloader,
         accumulation_steps=accumulation_steps,
+        trial=trial,
     )
     best_top1 = graph.train()
     return best_top1
