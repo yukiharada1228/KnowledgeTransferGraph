@@ -21,23 +21,19 @@ parser.add_argument("--num-nodes", default=3)
 parser.add_argument("--n_trials", default=1500)
 parser.add_argument(
     "--models",
-    # default=["resnet18", "resnet34", "resnet50"],
-    default=["resnet50"],
+    default=["resnet18", "resnet34", "resnet50"],
 )
 parser.add_argument(
     "--gates",
-    # default=["ThroughGate", "CutoffGate"],
-    default=["ThroughGate"],
+    default=["ThroughGate", "CutoffGate"],
 )
 parser.add_argument(
     "--ssls",
-    # default=["SimCLR", "MoCo", "SimSiam", "BYOL", "SwAV", "BarlowTwins", "DINO"],
-    default=["DINO"],
+    default=["SimCLR", "MoCo", "SimSiam", "BYOL", "SwAV", "BarlowTwins", "DINO"],
 )
 parser.add_argument(
     "--kds",
-    # default=["MSELoss", "KLLoss"],
-    default=["KLLoss"],
+    default=["MSELoss", "KLLoss"],
 )
 parser.add_argument("--transforms", default="DINO")
 parser.add_argument("--projector", default="SwAV")
@@ -129,7 +125,7 @@ def objective(trial):
             gate_name = trial.suggest_categorical(f"{i}_{j}_gate", gates_name)
             gates_list.append(getattr(gates, gate_name)(max_epoch))
         if i == 0:
-            model_name = models_name[0]
+            model_name = trial.suggest_categorical(f"{i}_model", models_name[0:1])
         else:
             model_name = trial.suggest_categorical(f"{i}_model", models_name)
         ssl_name = trial.suggest_categorical(f"{i}_ssl", ssls_name)
