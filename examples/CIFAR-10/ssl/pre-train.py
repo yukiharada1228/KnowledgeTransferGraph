@@ -23,7 +23,7 @@ parser.add_argument("--transforms", default="DINO")
 parser.add_argument("--projector", default="SwAV")
 
 args = parser.parse_args()
-manual_seed = args.seed
+manual_seed = int(args.seed)
 model_name = args.model
 ssl_name = args.ssl
 transforms_name = args.transforms
