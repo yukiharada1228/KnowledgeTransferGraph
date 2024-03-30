@@ -165,9 +165,9 @@ class KnowledgeTransferGraph:
             for image, label in self.test_dataloader:
                 self.test_on_batch(image=image, label=label)
             for model_id, node in enumerate(self.nodes):
+                if node.top1_meter.avg == 0.0:
+                    node.top1_meter.avg = node.eval()
                 test_top1 = node.top1_meter.avg
-                if test_top1 == 0.0:
-                    test_top1 = node.eval()
                 node.writer.add_scalar("test_top1", test_top1, epoch)
                 print("model_id: {0:}   top1 :test={1:.3f}".format(model_id, test_top1))
                 if node.best_top1 <= node.top1_meter.avg:
