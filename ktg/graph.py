@@ -5,11 +5,12 @@ from dataclasses import dataclass
 import optuna
 import torch
 import torch.nn as nn
-from ktg.utils import AverageMeter, accuracy, save_checkpoint
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+
+from ktg.utils import AverageMeter, accuracy, save_checkpoint
 
 
 class Edges(nn.Module):
@@ -56,9 +57,9 @@ class KnowledgeTransferGraph:
         self,
         nodes: list[Node],
         max_epoch: int,
-        accumulation_steps: int,
         train_dataloader: DataLoader,
         test_dataloader: DataLoader,
+        accumulation_steps: int = 1,
         trial=None,
     ):
         print("Welcome to KTG!!!")
