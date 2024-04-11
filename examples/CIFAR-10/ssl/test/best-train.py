@@ -1,8 +1,11 @@
 # Import packages
 import argparse
+import os
 from copy import deepcopy
 
+import optuna
 import torch
+from optuna.storages import JournalFileStorage, JournalStorage
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import datasets, transforms
@@ -17,7 +20,7 @@ from ktg.utils import (LARS, AverageMeter, KNNValidation, WorkerInitializer,
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
 parser.add_argument("--num-nodes", default=7)
-parser.add_argument("--n_trials", default=0)
+parser.add_argument("--n_trials", default=250)
 parser.add_argument(
     "--models",
     default=["resnet18", "resnet34", "resnet50"],
@@ -47,6 +50,23 @@ ssls_name = args.ssls
 kds_name = args.kds
 transforms_name = args.transforms
 projector_name = args.projector
+
+num_nodes = 7
+study_name = f"dcl_{num_nodes}"
+optuna_dir = f"../optuna/{study_name}"
+storage = JournalStorage(JournalFileStorage(os.path.join(optuna_dir, "optuna.log")))
+study = optuna.create_study(
+    storage=storage,
+    study_name=study_name,
+    load_if_exists=True,
+)
+
+study_df = study.trials_dataframe()
+complete_df = study_df[study_df.state == "COMPLETE"]
+sorted_df = complete_df.sort_values(by="value", ascending=False)
+
+top = 0
+top_series = sorted_df.iloc[top]
 
 
 def objective(trial):
@@ -117,15 +137,20 @@ def objective(trial):
         gates_list = []
         criterions = []
         for j in range(num_nodes):
-            if i == j:
-                loss_name = "SSLLoss"
-            else:
-                loss_name = kds_name[i][j]
+            loss_name = trial.suggest_categorical(
+                f"{i}_{j}_loss", [top_series[f"params_{i}_{j}_loss"]]
+            )
             criterions.append(getattr(losses, loss_name)())
-            gate_name = gates_name[i][j]
+            gate_name = trial.suggest_categorical(
+                f"{i}_{j}_gate", [top_series[f"params_{i}_{j}_gate"]]
+            )
             gates_list.append(getattr(gates, gate_name)(max_epoch))
-        model_name = models_name[i]
-        ssl_name = ssls_name[i]
+        model_name = trial.suggest_categorical(
+            f"{i}_model", [top_series[f"params_{i}_model"]]
+        )
+        ssl_name = trial.suggest_categorical(
+            f"{i}_ssl", [top_series[f"params_{i}_ssl"]]
+        )
         model = getattr(ssl_models, ssl_name)(
             encoder_func=getattr(cifar_models, model_name),
             batch_size=batch_size,
@@ -189,7 +214,7 @@ if __name__ == "__main__":
     from optuna.storages import JournalFileStorage, JournalStorage
 
     # Cteate study object
-    study_name = f"dcl_{num_nodes}"
+    study_name = f"best_{num_nodes}"
     optuna_dir = f"optuna/{study_name}"
     os.makedirs(optuna_dir, exist_ok=True)
     storage = JournalStorage(JournalFileStorage(os.path.join(optuna_dir, "optuna.log")))

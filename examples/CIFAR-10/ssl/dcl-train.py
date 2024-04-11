@@ -18,7 +18,7 @@ from ktg.utils import (LARS, AverageMeter, KNNValidation, WorkerInitializer,
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
 parser.add_argument("--num-nodes", default=7)
-parser.add_argument("--n_trials", default=1500)
+parser.add_argument("--n_trials", default=250)
 parser.add_argument(
     "--models",
     default=["resnet18", "resnet34", "resnet50"],
