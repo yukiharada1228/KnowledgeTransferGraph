@@ -34,8 +34,8 @@ set_seed(manual_seed)
 batch_size = 256 // accumulation_steps
 num_workers = 10
 
-train_dataset = TinyImageNet('tiny-imagenet-200', split='train')
-val_dataset = TinyImageNet('tiny-imagenet-200', split='val')
+train_dataset = TinyImageNet("tiny-imagenet-200", split="train")
+val_dataset = TinyImageNet("tiny-imagenet-200", split="val")
 transform = getattr(ssl_transforms, f"{transforms_name}Transforms")(size_crops=[64, 32])
 train_dataset.transform = transform
 val_dataset.transform = transform
@@ -86,9 +86,7 @@ criterions = [getattr(losses, "SSLLoss")()]
 writer = SummaryWriter(
     f"runs/pre-train/{model_name}/{ssl_name}/{transforms_name}/{ssl_name}"
 )
-save_dir = (
-    f"checkpoint/pre-train/{model_name}/{ssl_name}/{transforms_name}/{ssl_name}"
-)
+save_dir = f"checkpoint/pre-train/{model_name}/{ssl_name}/{transforms_name}/{ssl_name}"
 optimizer = getattr(torch.optim, optim_setting["name"])(
     model.parameters(), **optim_setting["args"]
 )

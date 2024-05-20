@@ -360,28 +360,23 @@ class MSELoss(nn.Module):
 class KLLoss(nn.Module):
     def __init__(self, T=0.1, lam=1):
         super(KLLoss, self).__init__()
-        # 損失関数
         self.criterion = nn.CosineSimilarity(dim=2)
         self.T = T
         self.lam = lam
 
     def forward(self, target_output, source_output):
-        # モデル1の特徴ベクトル
-        z1_m1 = target_output[1]
-        z2_m1 = target_output[2]
-        # モデル2の特徴ベクトル
-        z1_m2 = source_output[1].detach()
-        z2_m2 = source_output[2].detach()
+        z1_m1 = F.normalize(target_output[1], dim=-1)
+        z2_m1 = F.normalize(target_output[2], dim=-1)
+        z1_m2 = F.normalize(source_output[1].detach(), dim=-1)
+        z2_m2 = F.normalize(source_output[2].detach(), dim=-1)
 
-        # 特徴ベクトル(Projector)に関する知識転移2 : DoGoベース (サンプル間の関係性)
-        #   View1とView2間の特徴量の類似度における全ての組み合わせを計算
         sim_m1 = self.criterion(z1_m1.unsqueeze(1), z2_m1.unsqueeze(0))
         sim_m2 = self.criterion(z1_m2.unsqueeze(1), z2_m2.unsqueeze(0))
-        #   特徴量間の類似度関係を確率分布で表現
-        prob_m1 = F.softmax(sim_m1 / self.T, dim=1)
+
+        log_prob_m1 = F.log_softmax(sim_m1 / self.T, dim=1)
         prob_m2 = F.softmax(sim_m2 / self.T, dim=1)
-        #   損失計算
-        loss = self.lam * F.kl_div(prob_m1.log(), prob_m2.detach(), reduction="mean")
+
+        loss = self.lam * F.kl_div(log_prob_m1, prob_m2.detach(), reduction="mean")
         return loss
 
 

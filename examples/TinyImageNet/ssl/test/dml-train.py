@@ -14,7 +14,8 @@ from ktg import Edges, KnowledgeTransferGraph, Node, gates, losses
 from ktg.dataset.tinyimagenet import TinyImageNet
 from ktg.models import cifar_models, projector, ssl_models
 from ktg.transforms import ssl_transforms
-from ktg.utils import (AverageMeter, KNNValidation, WorkerInitializer, load_checkpoint, set_seed)
+from ktg.utils import (AverageMeter, KNNValidation, WorkerInitializer,
+                       load_checkpoint, set_seed)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
@@ -23,13 +24,7 @@ parser.add_argument("--models", default=["resnet18"])
 parser.add_argument("--gates", default=["ThroughGate"])
 parser.add_argument(
     "--ssls",
-    default=["SimCLR", 
-             "MoCo", 
-             "SimSiam", 
-             "BYOL", 
-             "SwAV", 
-             "BarlowTwins", 
-             "DINO"]
+    default=["SimCLR", "MoCo", "SimSiam", "BYOL", "SwAV", "BarlowTwins", "DINO"],
 )
 parser.add_argument("--kds", default=["KLLoss"])
 parser.add_argument("--transforms", default="DINO")
@@ -53,9 +48,11 @@ def objective(trial):
     batch_size = 256 // accumulation_steps
     num_workers = 10
 
-    train_dataset = TinyImageNet('tiny-imagenet-200', split='train')
-    val_dataset = TinyImageNet('tiny-imagenet-200', split='val')
-    transform = getattr(ssl_transforms, f"{transforms_name}Transforms")(size_crops=[64, 32])
+    train_dataset = TinyImageNet("tiny-imagenet-200", split="train")
+    val_dataset = TinyImageNet("tiny-imagenet-200", split="val")
+    transform = getattr(ssl_transforms, f"{transforms_name}Transforms")(
+        size_crops=[64, 32]
+    )
     train_dataset.transform = transform
     val_dataset.transform = transform
 
@@ -95,9 +92,7 @@ def objective(trial):
     }
 
     nodes = []
-    ssl_name = trial.suggest_categorical(
-        "ssl", ssls_name
-    )
+    ssl_name = trial.suggest_categorical("ssl", ssls_name)
     for i in range(num_nodes):
         gates_list = []
         criterions = []
@@ -108,13 +103,9 @@ def objective(trial):
             else:
                 loss_name = trial.suggest_categorical(f"{i}_{j}_loss", ["KLLoss"])
                 criterions.append(getattr(losses, loss_name)(lam=100))
-            gate_name = trial.suggest_categorical(
-                f"{i}_{j}_gate", gates_name
-            )
+            gate_name = trial.suggest_categorical(f"{i}_{j}_gate", gates_name)
             gates_list.append(getattr(gates, gate_name)(max_epoch))
-        model_name = trial.suggest_categorical(
-            f"{i}_model", models_name
-        )
+        model_name = trial.suggest_categorical(f"{i}_model", models_name)
         model = getattr(ssl_models, ssl_name)(
             encoder_func=getattr(cifar_models, model_name),
             batch_size=batch_size,

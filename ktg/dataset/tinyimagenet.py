@@ -5,19 +5,20 @@ References:
     - https://stanford.edu/~shervine/blog/pytorch-how-to-generate-data-parallel.html
 """
 
-import os
 import glob
-from torch.utils.data import Dataset, DataLoader, random_split
-from PIL import Image
+import os
+
 import torch
+from PIL import Image
+from torch.utils.data import DataLoader, Dataset, random_split
 from torchvision import transforms
 
 from .custom_dataset import CustomDataset
 
-EXTENSION = 'JPEG'
+EXTENSION = "JPEG"
 NUM_IMAGES_PER_CLASS = 500
-CLASS_LIST_FILE = 'wnids.txt'
-VAL_ANNOTATION_FILE = 'val_annotations.txt'
+CLASS_LIST_FILE = "wnids.txt"
+VAL_ANNOTATION_FILE = "val_annotations.txt"
 
 
 class TinyImageNet(Dataset):
@@ -35,30 +36,42 @@ class TinyImageNet(Dataset):
     in_memory: bool
         Set to True if there is enough memory (about 5G) and want to minimize disk IO overhead.
     """
-    def __init__(self, root, split='train', transform=None, target_transform=None, in_memory=False):
+
+    def __init__(
+        self,
+        root,
+        split="train",
+        transform=None,
+        target_transform=None,
+        in_memory=False,
+    ):
         self.root = os.path.expanduser(root)
         self.split = split
         self.transform = transform
         self.target_transform = target_transform
         self.in_memory = in_memory
         self.split_dir = os.path.join(root, self.split)
-        self.image_paths = sorted(glob.iglob(os.path.join(self.split_dir, '**', '*.%s' % EXTENSION), recursive=True))
+        self.image_paths = sorted(
+            glob.iglob(
+                os.path.join(self.split_dir, "**", "*.%s" % EXTENSION), recursive=True
+            )
+        )
         self.labels = {}  # fname - label number mapping
         self.images = []  # used for in-memory processing
 
         # build class label - number mapping
-        with open(os.path.join(self.root, CLASS_LIST_FILE), 'r') as fp:
+        with open(os.path.join(self.root, CLASS_LIST_FILE), "r") as fp:
             self.label_texts = sorted([text.strip() for text in fp.readlines()])
         self.label_text_to_number = {text: i for i, text in enumerate(self.label_texts)}
 
-        if self.split == 'train':
+        if self.split == "train":
             for label_text, i in self.label_text_to_number.items():
                 for cnt in range(NUM_IMAGES_PER_CLASS):
-                    self.labels['%s_%d.%s' % (label_text, cnt, EXTENSION)] = i
-        elif self.split == 'val':
-            with open(os.path.join(self.split_dir, VAL_ANNOTATION_FILE), 'r') as fp:
+                    self.labels["%s_%d.%s" % (label_text, cnt, EXTENSION)] = i
+        elif self.split == "val":
+            with open(os.path.join(self.split_dir, VAL_ANNOTATION_FILE), "r") as fp:
                 for line in fp.readlines():
-                    terms = line.split('\t')
+                    terms = line.split("\t")
                     file_name, label_text = terms[0], terms[1]
                     self.labels[file_name] = self.label_text_to_number[label_text]
 
@@ -77,30 +90,35 @@ class TinyImageNet(Dataset):
         else:
             img = self.read_image(file_path)
 
-        if self.split == 'test':
+        if self.split == "test":
             return img
         else:
             # file_name = file_path.split('/')[-1]
             return img, self.labels[os.path.basename(file_path)]
 
     def __repr__(self):
-        fmt_str = 'Dataset ' + self.__class__.__name__ + '\n'
-        fmt_str += '    Number of datapoints: {}\n'.format(self.__len__())
+        fmt_str = "Dataset " + self.__class__.__name__ + "\n"
+        fmt_str += "    Number of datapoints: {}\n".format(self.__len__())
         tmp = self.split
-        fmt_str += '    Split: {}\n'.format(tmp)
-        fmt_str += '    Root Location: {}\n'.format(self.root)
-        tmp = '    Transforms (if any): '
-        fmt_str += '{0}{1}\n'.format(tmp, self.transform.__repr__().replace('\n', '\n' + ' ' * len(tmp)))
-        tmp = '    Target Transforms (if any): '
-        fmt_str += '{0}{1}'.format(tmp, self.target_transform.__repr__().replace('\n', '\n' + ' ' * len(tmp)))
+        fmt_str += "    Split: {}\n".format(tmp)
+        fmt_str += "    Root Location: {}\n".format(self.root)
+        tmp = "    Transforms (if any): "
+        fmt_str += "{0}{1}\n".format(
+            tmp, self.transform.__repr__().replace("\n", "\n" + " " * len(tmp))
+        )
+        tmp = "    Target Transforms (if any): "
+        fmt_str += "{0}{1}".format(
+            tmp, self.target_transform.__repr__().replace("\n", "\n" + " " * len(tmp))
+        )
         return fmt_str
 
     def read_image(self, path):
         img = Image.open(path).convert("RGB")
         return self.transform(img) if self.transform else img
-    
+
+
 def get_datasets():
-    dataset = TinyImageNet('tiny-imagenet-200', split='train', in_memory=True)
+    dataset = TinyImageNet("tiny-imagenet-200", split="train", in_memory=True)
     lengths = [80000, 20000]
     subsets = random_split(dataset, lengths)
     loader = DataLoader(
@@ -147,5 +165,7 @@ def get_datasets():
 
     train_dataset = CustomDataset(subsets[0], transform=train_transform)
     val_dataset = CustomDataset(subsets[1], transform=test_transform)
-    test_dataset = TinyImageNet('tiny-imagenet-200', split='val', in_memory=True, transform=test_transform)
+    test_dataset = TinyImageNet(
+        "tiny-imagenet-200", split="val", in_memory=True, transform=test_transform
+    )
     return train_dataset, val_dataset, test_dataset

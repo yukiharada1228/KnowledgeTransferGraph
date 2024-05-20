@@ -51,6 +51,7 @@ kds_name = args.kds
 transforms_name = args.transforms
 projector_name = args.projector
 
+
 def objective(trial):
     # Fix the seed value
     set_seed(manual_seed)
@@ -125,13 +126,9 @@ def objective(trial):
             else:
                 loss_name = trial.suggest_categorical(f"{i}_{j}_loss", kds_name)
             criterions.append(getattr(losses, loss_name)())
-            gate_name = trial.suggest_categorical(
-                f"{i}_{j}_gate", gates_name
-            )
+            gate_name = trial.suggest_categorical(f"{i}_{j}_gate", gates_name)
             gates_list.append(getattr(gates, gate_name)(max_epoch))
-        model_name = trial.suggest_categorical(
-            f"{i}_model", models_name
-        )
+        model_name = trial.suggest_categorical(f"{i}_model", models_name)
         model = getattr(ssl_models, ssl_name)(
             encoder_func=getattr(cifar_models, model_name),
             batch_size=batch_size,
