@@ -4,27 +4,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class CrossEntropySoftTargetLoss(nn.Module):
-    def __init__(self, T):
-        super(CrossEntropySoftTargetLoss, self).__init__()
+class KLDivLoss(nn.Module):
+    def __init__(self, T=1):
+        super(KLDivLoss, self).__init__()
         self.T = T
         self.softmax = nn.Softmax(dim=-1)
-        self.criterion = nn.CrossEntropyLoss()
 
     def forward(self, y_pred, y_gt):
-        y_pred_soft = y_pred / self.T
-        y_gt_soft = y_gt.detach() / self.T
-        return self.criterion(y_pred_soft, self.softmax(y_gt_soft)) * (self.T**2)
-
-
-class KLDivLoss(nn.Module):
-    def __init__(self):
-        super(KLDivLoss, self).__init__()
-        self.softmax = nn.Softmax(dim=-1)
-
-    def forward(self, y_pred, y_gt):
-        y_pred_soft = self.softmax(y_pred)
-        y_gt_soft = self.softmax(y_gt.detach())
+        y_pred_soft = self.softmax(y_pred / self.T)
+        y_gt_soft = self.softmax(y_gt.detach() / self.T)
         return self.kl_divergence(y_pred_soft, y_gt_soft)
 
     def kl_divergence(self, student, teacher):
@@ -370,11 +358,12 @@ class MSELoss(nn.Module):
 
 
 class KLLoss(nn.Module):
-    def __init__(self, T=0.1):
+    def __init__(self, T=0.1, lam=1):
         super(KLLoss, self).__init__()
         # 損失関数
         self.criterion = nn.CosineSimilarity(dim=2)
         self.T = T
+        self.lam = lam
 
     def forward(self, target_output, source_output):
         # モデル1の特徴ベクトル
@@ -392,5 +381,25 @@ class KLLoss(nn.Module):
         prob_m1 = F.softmax(sim_m1 / self.T, dim=1)
         prob_m2 = F.softmax(sim_m2 / self.T, dim=1)
         #   損失計算
-        loss = F.kl_div(prob_m1.log(), prob_m2.detach(), reduction="batchmean")
+        loss = self.lam * F.kl_div(prob_m1.log(), prob_m2.detach(), reduction="mean")
         return loss
+
+
+class MSEKLLoss(nn.Module):
+    def __init__(self, mse_weight=1.0, kl_weight=1.0, kl_temperature=0.1):
+        super(MSEKLLoss, self).__init__()
+        # MSELossとKLLossのインスタンス化
+        self.mse_loss = MSELoss()
+        self.kl_loss = KLLoss(T=kl_temperature)
+        # 重み付け係数
+        self.mse_weight = mse_weight
+        self.kl_weight = kl_weight
+
+    def forward(self, target_output, source_output):
+        # MSELossの計算
+        mse_loss = self.mse_loss(target_output, source_output)
+        # KLLossの計算
+        kl_loss = self.kl_loss(target_output, source_output)
+        # 二つの損失を足し合わせて2で割る
+        total_loss = (self.mse_weight * mse_loss + self.kl_weight * kl_loss) / 2.0
+        return total_loss

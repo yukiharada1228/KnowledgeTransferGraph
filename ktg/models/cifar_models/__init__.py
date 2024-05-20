@@ -1,3 +1,5 @@
-from .cifar_resnet import (resnet18, resnet20, resnet32, resnet34, resnet50,
-                           resnet56, resnet110)
+from .cifar_resnet import (bit_resnet18_b158, bit_resnet20_b158,
+                           bit_resnet32_b158, bit_resnet56_b158,
+                           bit_resnet110_b158, resnet18, resnet20, resnet32,
+                           resnet34, resnet50, resnet56, resnet110)
 from .cifar_wideresnet import wideresnet28_2

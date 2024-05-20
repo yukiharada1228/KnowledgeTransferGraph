@@ -166,9 +166,9 @@ def objective(trial):
                 is_best=True,
             )
         writer = SummaryWriter(
-            f"runs/dcl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
+            f"runs/best_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
         )
-        save_dir = f"checkpoint/dcl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
+        save_dir = f"checkpoint/best_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
         optimizer = LARS(model.parameters(), **optim_setting["args"])
         scheduler = get_cosine_schedule_with_warmup(
             optimizer, **scheduler_setting["args"]

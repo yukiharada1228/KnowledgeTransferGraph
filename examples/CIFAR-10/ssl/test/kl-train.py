@@ -1,14 +1,16 @@
 # Import packages
 import argparse
+import os
 from copy import deepcopy
 
+import optuna
 import torch
+from optuna.storages import JournalFileStorage, JournalStorage
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from torchvision import transforms
+from torchvision import datasets, transforms
 
 from ktg import Edges, KnowledgeTransferGraph, Node, gates, losses
-from ktg.dataset.cifar_datasets.cifar10 import get_datasets
 from ktg.models import cifar_models, projector, ssl_models
 from ktg.transforms import ssl_transforms
 from ktg.utils import (LARS, AverageMeter, KNNValidation, WorkerInitializer,
@@ -17,8 +19,8 @@ from ktg.utils import (LARS, AverageMeter, KNNValidation, WorkerInitializer,
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
-parser.add_argument("--num-nodes", default=3)
-parser.add_argument("--n_trials", default=300)
+parser.add_argument("--num-nodes", default=7)
+parser.add_argument("--n_trials", default=250)
 parser.add_argument(
     "--models",
     default=["resnet18", "resnet34", "resnet50"],
@@ -49,6 +51,23 @@ kds_name = args.kds
 transforms_name = args.transforms
 projector_name = args.projector
 
+num_nodes = 7
+study_name = f"dcl_{num_nodes}"
+optuna_dir = f"../optuna/{study_name}"
+storage = JournalStorage(JournalFileStorage(os.path.join(optuna_dir, "optuna.log")))
+study = optuna.create_study(
+    storage=storage,
+    study_name=study_name,
+    load_if_exists=True,
+)
+
+study_df = study.trials_dataframe()
+complete_df = study_df[study_df.state == "COMPLETE"]
+sorted_df = complete_df.sort_values(by="value", ascending=False)
+
+top = 0
+top_series = sorted_df.iloc[top]
+
 
 def objective(trial):
     # Fix the seed value
@@ -59,7 +78,8 @@ def objective(trial):
     batch_size = 512 // accumulation_steps
     num_workers = 10
 
-    train_dataset, val_dataset, _ = get_datasets()
+    train_dataset = datasets.CIFAR10(root="data", train=True, download=True)
+    val_dataset = datasets.CIFAR10(root="data", train=False, download=True)
     transform = getattr(ssl_transforms, f"{transforms_name}Transforms")()
     train_dataset.transform = transform
     val_dataset.transform = transform
@@ -120,15 +140,18 @@ def objective(trial):
             if i == j:
                 loss_name = trial.suggest_categorical(f"{i}_{j}_loss", ["SSLLoss"])
             else:
-                loss_name = trial.suggest_categorical(f"{i}_{j}_loss", kds_name)
+                loss_name = trial.suggest_categorical(f"{i}_{j}_loss", ["KLLoss"])
             criterions.append(getattr(losses, loss_name)())
-            gate_name = trial.suggest_categorical(f"{i}_{j}_gate", gates_name)
+            gate_name = trial.suggest_categorical(
+                f"{i}_{j}_gate", [top_series[f"params_{i}_{j}_gate"]]
+            )
             gates_list.append(getattr(gates, gate_name)(max_epoch))
-        if i == 0:
-            model_name = trial.suggest_categorical(f"{i}_model", models_name[0:1])
-        else:
-            model_name = trial.suggest_categorical(f"{i}_model", models_name)
-        ssl_name = trial.suggest_categorical(f"{i}_ssl", ssls_name)
+        model_name = trial.suggest_categorical(
+            f"{i}_model", [top_series[f"params_{i}_model"]]
+        )
+        ssl_name = trial.suggest_categorical(
+            f"{i}_ssl", [top_series[f"params_{i}_ssl"]]
+        )
         model = getattr(ssl_models, ssl_name)(
             encoder_func=getattr(cifar_models, model_name),
             batch_size=batch_size,
@@ -144,9 +167,9 @@ def objective(trial):
                 is_best=True,
             )
         writer = SummaryWriter(
-            f"runs/dcl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
+            f"runs/kl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
         )
-        save_dir = f"checkpoint/dcl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
+        save_dir = f"checkpoint/kl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
         optimizer = LARS(model.parameters(), **optim_setting["args"])
         scheduler = get_cosine_schedule_with_warmup(
             optimizer, **scheduler_setting["args"]
@@ -192,13 +215,12 @@ if __name__ == "__main__":
     from optuna.storages import JournalFileStorage, JournalStorage
 
     # Cteate study object
-    study_name = f"dcl_{num_nodes}"
+    study_name = f"kl_{num_nodes}"
     optuna_dir = f"optuna/{study_name}"
     os.makedirs(optuna_dir, exist_ok=True)
     storage = JournalStorage(JournalFileStorage(os.path.join(optuna_dir, "optuna.log")))
-    sampler = optuna.samplers.TPESampler(multivariate=True)
-    pruner = optuna.pruners.SuccessiveHalvingPruner()
-    # pruner = optuna.pruners.NopPruner()
+    sampler = optuna.samplers.BruteForceSampler()
+    pruner = optuna.pruners.NopPruner()
     study = optuna.create_study(
         storage=storage,
         study_name=study_name,

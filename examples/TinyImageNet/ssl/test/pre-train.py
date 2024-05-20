@@ -8,37 +8,35 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 
 from ktg import Edges, KnowledgeTransferGraph, Node, losses
-from ktg.dataset.cifar_datasets.cifar100 import get_datasets
+from ktg.dataset.tinyimagenet import TinyImageNet
 from ktg.gates import ThroughGate
 from ktg.models import cifar_models, projector, ssl_models
 from ktg.transforms import ssl_transforms
-from ktg.utils import (LARS, AverageMeter, KNNValidation, WorkerInitializer,
-                       get_cosine_schedule_with_warmup, set_seed)
+from ktg.utils import AverageMeter, KNNValidation, WorkerInitializer, set_seed
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
 parser.add_argument("--model", default="resnet18")
-parser.add_argument("--ssl", default="DINO")
+parser.add_argument("--ssl", default="SimCLR")
 parser.add_argument("--transforms", default="DINO")
-parser.add_argument("--projector", default="SwAV")
+parser.add_argument("--accumulation_steps", default=2)
 
 args = parser.parse_args()
 manual_seed = args.seed
 model_name = args.model
 ssl_name = args.ssl
 transforms_name = args.transforms
-projector_name = args.projector
+accumulation_steps = int(args.accumulation_steps)
 
 # Fix the seed value
 set_seed(manual_seed)
 
-# Prepare the CIFAR-10 for training
-accumulation_steps = 2**2
-batch_size = 512 // accumulation_steps
+batch_size = 256 // accumulation_steps
 num_workers = 10
 
-train_dataset, val_dataset, _ = get_datasets()
-transform = getattr(ssl_transforms, f"{transforms_name}Transforms")()
+train_dataset = TinyImageNet('tiny-imagenet-200', split='train')
+val_dataset = TinyImageNet('tiny-imagenet-200', split='val')
+transform = getattr(ssl_transforms, f"{transforms_name}Transforms")(size_crops=[64, 32])
 train_dataset.transform = transform
 val_dataset.transform = transform
 
@@ -70,23 +68,10 @@ val_dataloader = DataLoader(
 max_epoch = 800
 
 optim_setting = {
-    "name": "LARS",
+    "name": "AdamW",
     "args": {
-        "lr": 0.3 * (batch_size * accumulation_steps / 256),
-        "weight_decay": 10e-6,
-        "momentum": 0.9,
-        "eta": 0.001,
-        "weight_decay_filter": False,
-        "lars_adaptation_filter": False,
-    },
-}
-scheduler_setting = {
-    "name": "get_cosine_schedule_with_warmup",
-    "args": {
-        "num_warmup_steps": 10,
-        "num_training_steps": max_epoch,
-        "num_cycles": 0.5,
-        "last_epoch": -1,
+        "lr": 3e-4 * (batch_size * accumulation_steps / 256),
+        "weight_decay": 1e-6,
     },
 }
 
@@ -95,17 +80,18 @@ gates = [ThroughGate(max_epoch)]
 model = getattr(ssl_models, ssl_name)(
     encoder_func=getattr(cifar_models, model_name),
     batch_size=batch_size,
-    projector_func=getattr(projector, f"{projector_name}Projector"),
+    projector_func=getattr(projector, f"{ssl_name}Projector"),
 ).cuda()
 criterions = [getattr(losses, "SSLLoss")()]
 writer = SummaryWriter(
-    f"runs/pre-train/{model_name}/{projector_name}/{transforms_name}/{ssl_name}"
+    f"runs/pre-train/{model_name}/{ssl_name}/{transforms_name}/{ssl_name}"
 )
 save_dir = (
-    f"checkpoint/pre-train/{model_name}/{projector_name}/{transforms_name}/{ssl_name}"
+    f"checkpoint/pre-train/{model_name}/{ssl_name}/{transforms_name}/{ssl_name}"
 )
-optimizer = LARS(model.parameters(), **optim_setting["args"])
-scheduler = get_cosine_schedule_with_warmup(optimizer, **scheduler_setting["args"])
+optimizer = getattr(torch.optim, optim_setting["name"])(
+    model.parameters(), **optim_setting["args"]
+)
 edges = Edges(criterions, gates)
 
 node = Node(
@@ -114,7 +100,6 @@ node = Node(
     scaler=torch.cuda.amp.GradScaler(),
     save_dir=save_dir,
     optimizer=optimizer,
-    scheduler=scheduler,
     edges=edges,
     loss_meter=AverageMeter(),
     top1_meter=AverageMeter(),

@@ -49,7 +49,8 @@ class PositiveGammaGate(nn.Module):
 
     def forward(self, loss, epoch):
         loss_weight = epoch / self.max_epoch
-        loss *= loss_weight ** (1 / self.gamma)
+        loss_weight = loss_weight ** (1 / self.gamma)
+        loss *= loss_weight
         return loss
 
 
@@ -61,5 +62,6 @@ class NegativeGammaGate(nn.Module):
 
     def forward(self, loss, epoch):
         loss_weight = (self.max_epoch - epoch) / self.max_epoch
-        loss *= loss_weight ** (1 / self.gamma)
+        loss_weight = loss_weight ** (1 / self.gamma)
+        loss *= loss_weight
         return loss

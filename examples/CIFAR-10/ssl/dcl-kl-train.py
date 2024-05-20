@@ -21,11 +21,11 @@ parser.add_argument("--num-nodes", default=3)
 parser.add_argument("--n_trials", default=300)
 parser.add_argument(
     "--models",
-    default=["resnet18", "resnet34", "resnet50"],
+    default=["resnet18"],
 )
 parser.add_argument(
     "--gates",
-    default=["ThroughGate", "CutoffGate"],
+    default=["PositiveGammaGate", "NegativeGammaGate"],
 )
 parser.add_argument(
     "--ssls",
@@ -33,7 +33,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--kds",
-    default=["MSELoss", "KLLoss"],
+    default=["KLLoss"],
 )
 parser.add_argument("--transforms", default="DINO")
 parser.add_argument("--projector", default="SwAV")
@@ -123,30 +123,28 @@ def objective(trial):
                 loss_name = trial.suggest_categorical(f"{i}_{j}_loss", kds_name)
             criterions.append(getattr(losses, loss_name)())
             gate_name = trial.suggest_categorical(f"{i}_{j}_gate", gates_name)
-            gates_list.append(getattr(gates, gate_name)(max_epoch))
-        if i == 0:
-            model_name = trial.suggest_categorical(f"{i}_model", models_name[0:1])
-        else:
-            model_name = trial.suggest_categorical(f"{i}_model", models_name)
+            gamma = trial.suggest_float(f"{i}_{j}_gamma", 0.001, 1000, log=True)
+            gates_list.append(getattr(gates, gate_name)(max_epoch, gamma))
+        model_name = trial.suggest_categorical(f"{i}_model", models_name)
         ssl_name = trial.suggest_categorical(f"{i}_ssl", ssls_name)
         model = getattr(ssl_models, ssl_name)(
             encoder_func=getattr(cifar_models, model_name),
             batch_size=batch_size,
             projector_func=getattr(projector, f"{projector_name}Projector"),
         ).cuda()
-        if (
-            all(gate.__class__.__name__ == "CutoffGate" for gate in gates_list)
-            and i != 0
-        ):
-            load_checkpoint(
-                model=model,
-                save_dir=f"checkpoint/pre-train/{model_name}/{projector_name}/{transforms_name}/{ssl_name}",
-                is_best=True,
-            )
+        # if (
+        #     all(gate.__class__.__name__ == "CutoffGate" for gate in gates_list)
+        #     and i != 0
+        # ):
+        #     load_checkpoint(
+        #         model=model,
+        #         save_dir=f"checkpoint/pre-train/{model_name}/{projector_name}/{transforms_name}/{ssl_name}",
+        #         is_best=True,
+        #     )
         writer = SummaryWriter(
-            f"runs/dcl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
+            f"runs/dcl_kl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
         )
-        save_dir = f"checkpoint/dcl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
+        save_dir = f"checkpoint/dcl_kl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
         optimizer = LARS(model.parameters(), **optim_setting["args"])
         scheduler = get_cosine_schedule_with_warmup(
             optimizer, **scheduler_setting["args"]
@@ -192,13 +190,12 @@ if __name__ == "__main__":
     from optuna.storages import JournalFileStorage, JournalStorage
 
     # Cteate study object
-    study_name = f"dcl_{num_nodes}"
+    study_name = f"dcl_kl_{num_nodes}"
     optuna_dir = f"optuna/{study_name}"
     os.makedirs(optuna_dir, exist_ok=True)
     storage = JournalStorage(JournalFileStorage(os.path.join(optuna_dir, "optuna.log")))
     sampler = optuna.samplers.TPESampler(multivariate=True)
-    pruner = optuna.pruners.SuccessiveHalvingPruner()
-    # pruner = optuna.pruners.NopPruner()
+    pruner = optuna.pruners.NopPruner()
     study = optuna.create_study(
         storage=storage,
         study_name=study_name,

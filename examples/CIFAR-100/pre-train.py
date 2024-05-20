@@ -14,11 +14,15 @@ from ktg.utils import AverageMeter, WorkerInitializer, set_seed
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
+parser.add_argument("--lr", default=0.1)
+parser.add_argument("--wd", default=5e-4)
 parser.add_argument("--model", default="resnet32")
 
 args = parser.parse_args()
-manualSeed = args.seed
+manualSeed = int(args.seed)
 model_name = args.model
+lr = float(args.lr)
+wd = float(args.wd)
 
 # Fix the seed value
 set_seed(manualSeed)
@@ -54,9 +58,9 @@ max_epoch = 200
 optim_setting = {
     "name": "SGD",
     "args": {
-        "lr": 0.1,
+        "lr": lr,
         "momentum": 0.9,
-        "weight_decay": 5e-4,
+        "weight_decay": wd,
         "nesterov": True,
     },
 }

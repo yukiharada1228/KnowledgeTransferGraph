@@ -17,7 +17,7 @@ from ktg.utils import (LARS, AverageMeter, KNNValidation, WorkerInitializer,
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
-parser.add_argument("--num-nodes", default=3)
+parser.add_argument("--num-nodes", default=7)
 parser.add_argument("--n_trials", default=300)
 parser.add_argument(
     "--models",
@@ -33,7 +33,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--kds",
-    default=["MSELoss", "KLLoss"],
+    default=["MSELoss", "KLLoss", "MSEKLLoss"],
 )
 parser.add_argument("--transforms", default="DINO")
 parser.add_argument("--projector", default="SwAV")
@@ -144,9 +144,9 @@ def objective(trial):
                 is_best=True,
             )
         writer = SummaryWriter(
-            f"runs/dcl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
+            f"runs/dcl_mse_kl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
         )
-        save_dir = f"checkpoint/dcl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
+        save_dir = f"checkpoint/dcl_mse_kl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
         optimizer = LARS(model.parameters(), **optim_setting["args"])
         scheduler = get_cosine_schedule_with_warmup(
             optimizer, **scheduler_setting["args"]
@@ -192,13 +192,12 @@ if __name__ == "__main__":
     from optuna.storages import JournalFileStorage, JournalStorage
 
     # Cteate study object
-    study_name = f"dcl_{num_nodes}"
+    study_name = f"dcl_mse_kl_{num_nodes}"
     optuna_dir = f"optuna/{study_name}"
     os.makedirs(optuna_dir, exist_ok=True)
     storage = JournalStorage(JournalFileStorage(os.path.join(optuna_dir, "optuna.log")))
     sampler = optuna.samplers.TPESampler(multivariate=True)
     pruner = optuna.pruners.SuccessiveHalvingPruner()
-    # pruner = optuna.pruners.NopPruner()
     study = optuna.create_study(
         storage=storage,
         study_name=study_name,

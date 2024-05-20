@@ -12,6 +12,47 @@ from torch.utils.tensorboard import SummaryWriter
 
 from ktg.utils import AverageMeter, accuracy, save_checkpoint
 
+# class Edges(nn.Module):
+#     def __init__(self, criterions, gates):
+#         super(Edges, self).__init__()
+#         self.criterions = criterions
+#         self.gates = gates
+
+#     def forward(self, model_id, outputs, labels, epoch):
+#         if model_id < 0 or model_id >= len(outputs):
+#             raise ValueError(f"Invalid model_id: {model_id}")
+
+#         losses = []
+#         losses_weight = []
+#         target_output = outputs[model_id]
+#         label = labels[model_id]
+
+#         for i, (source_output, criterion, gate) in enumerate(
+#             zip(outputs, self.criterions, self.gates)
+#         ):
+#             if i == model_id:
+#                 loss, loss_weight = self.calculate_loss(
+#                     criterion, gate, target_output, label, epoch
+#                 )
+#             else:
+#                 loss, loss_weight = self.calculate_loss(
+#                     criterion, gate, target_output, source_output, epoch
+#                 )
+
+#             losses.append(loss)
+#             losses_weight.append(loss_weight)
+
+#         total_loss = torch.stack(losses).mean()
+#         total_weight = sum(losses_weight)
+#         if total_weight > 0:
+#             total_loss /= total_weight
+
+#         return 2 * total_loss
+
+#     def calculate_loss(self, criterion, gate, output1, output2, epoch):
+#         loss = gate(criterion(output1, output2), epoch)
+#         return loss
+
 
 class Edges(nn.Module):
     def __init__(self, criterions, gates):
@@ -37,6 +78,30 @@ class Edges(nn.Module):
         return loss
 
 
+class WeightDecayScheduler:
+    def __init__(self, optimizer, total_steps, decay_start_step, last_epoch=-1):
+        self.optimizer = optimizer
+        self.decay_start_step = decay_start_step
+        self.total_steps = total_steps
+        self.last_epoch = last_epoch
+        self.base_weight_decays = [
+            group["weight_decay"] for group in optimizer.param_groups
+        ]
+
+    def step(self, current_step):
+        if current_step >= self.decay_start_step:
+            weight_decay = 0.0
+        else:
+            weight_decay = self.base_weight_decays[
+                0
+            ]  # Assuming all groups have the same weight decay
+
+        for param_group, base_weight_decay in zip(
+            self.optimizer.param_groups, self.base_weight_decays
+        ):
+            param_group["weight_decay"] = weight_decay
+
+
 @dataclass
 class Node:
     model: nn.Module
@@ -44,10 +109,11 @@ class Node:
     scaler: torch.cuda.amp.GradScaler
     save_dir: str
     optimizer: Optimizer
-    scheduler: LRScheduler
     edges: Edges
     loss_meter: AverageMeter
     top1_meter: AverageMeter
+    scheduler: LRScheduler = None
+    wdscheduler: WeightDecayScheduler = None
     best_top1: float = 0.0
     eval: nn.Module = accuracy
 
@@ -153,7 +219,10 @@ class KnowledgeTransferGraph:
                 node.writer.add_scalar("train_lr", train_lr, epoch)
                 node.writer.add_scalar("train_loss", train_loss, epoch)
                 node.writer.add_scalar("train_top1", train_top1, epoch)
-                node.scheduler.step()
+                if node.scheduler is not None:
+                    node.scheduler.step()
+                if node.wdscheduler is not None:
+                    node.wdscheduler.step(epoch)
                 print(
                     "model_id: {0:}   loss :train={1:.3f}   top1 :train={2:.3f}".format(
                         model_id, train_loss, train_top1

@@ -1,14 +1,16 @@
 # Import packages
 import argparse
+import os
 from copy import deepcopy
 
+import optuna
 import torch
+from optuna.storages import JournalFileStorage, JournalStorage
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from torchvision import transforms
+from torchvision import datasets, transforms
 
 from ktg import Edges, KnowledgeTransferGraph, Node, gates, losses
-from ktg.dataset.cifar_datasets.cifar100 import get_datasets
 from ktg.models import cifar_models, projector, ssl_models
 from ktg.transforms import ssl_transforms
 from ktg.utils import (LARS, AverageMeter, KNNValidation, WorkerInitializer,
@@ -18,41 +20,36 @@ from ktg.utils import (LARS, AverageMeter, KNNValidation, WorkerInitializer,
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
 parser.add_argument("--num-nodes", default=3)
-parser.add_argument("--n_trials", default=1500)
+parser.add_argument("--n_trials", default=250)
 parser.add_argument(
     "--models",
-    # default=["resnet18", "resnet34", "resnet50"],
-    default=["resnet50"],
+    default=["resnet18"],
 )
 parser.add_argument(
     "--gates",
-    # default=["ThroughGate", "CutoffGate"],
     default=["ThroughGate"],
 )
 parser.add_argument(
     "--ssls",
-    # default=["SimCLR", "MoCo", "SimSiam", "BYOL", "SwAV", "BarlowTwins", "DINO"],
-    default=["DINO"],
+    default=["SimCLR", "MoCo", "SimSiam", "BYOL", "SwAV", "BarlowTwins", "DINO"],
 )
 parser.add_argument(
     "--kds",
-    # default=["MSELoss", "KLLoss"],
     default=["KLLoss"],
 )
 parser.add_argument("--transforms", default="DINO")
 parser.add_argument("--projector", default="SwAV")
 
 args = parser.parse_args()
-manual_seed = args.seed
-num_nodes = args.num_nodes
-n_trials = args.n_trials
+manual_seed = int(args.seed)
+num_nodes = int(args.num_nodes)
+n_trials = int(args.n_trials)
 models_name = args.models
 gates_name = args.gates
 ssls_name = args.ssls
 kds_name = args.kds
 transforms_name = args.transforms
 projector_name = args.projector
-
 
 def objective(trial):
     # Fix the seed value
@@ -63,7 +60,8 @@ def objective(trial):
     batch_size = 512 // accumulation_steps
     num_workers = 10
 
-    train_dataset, val_dataset, _ = get_datasets()
+    train_dataset = datasets.CIFAR10(root="data", train=True, download=True)
+    val_dataset = datasets.CIFAR10(root="data", train=False, download=True)
     transform = getattr(ssl_transforms, f"{transforms_name}Transforms")()
     train_dataset.transform = transform
     val_dataset.transform = transform
@@ -117,6 +115,7 @@ def objective(trial):
     }
 
     nodes = []
+    ssl_name = trial.suggest_categorical("ssl", ssls_name)
     for i in range(num_nodes):
         gates_list = []
         criterions = []
@@ -126,13 +125,13 @@ def objective(trial):
             else:
                 loss_name = trial.suggest_categorical(f"{i}_{j}_loss", kds_name)
             criterions.append(getattr(losses, loss_name)())
-            gate_name = trial.suggest_categorical(f"{i}_{j}_gate", gates_name)
+            gate_name = trial.suggest_categorical(
+                f"{i}_{j}_gate", gates_name
+            )
             gates_list.append(getattr(gates, gate_name)(max_epoch))
-        if i == 0:
-            model_name = models_name[0]
-        else:
-            model_name = trial.suggest_categorical(f"{i}_model", models_name)
-        ssl_name = trial.suggest_categorical(f"{i}_ssl", ssls_name)
+        model_name = trial.suggest_categorical(
+            f"{i}_model", models_name
+        )
         model = getattr(ssl_models, ssl_name)(
             encoder_func=getattr(cifar_models, model_name),
             batch_size=batch_size,
@@ -148,9 +147,9 @@ def objective(trial):
                 is_best=True,
             )
         writer = SummaryWriter(
-            f"runs/dcl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
+            f"runs/ssl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
         )
-        save_dir = f"checkpoint/dcl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
+        save_dir = f"checkpoint/ssl_{num_nodes}/{projector_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
         optimizer = LARS(model.parameters(), **optim_setting["args"])
         scheduler = get_cosine_schedule_with_warmup(
             optimizer, **scheduler_setting["args"]
@@ -182,6 +181,7 @@ def objective(trial):
         train_dataloader=train_dataloader,
         test_dataloader=val_dataloader,
         accumulation_steps=accumulation_steps,
+        trial=trial,
     )
     best_top1 = graph.train()
     return best_top1
@@ -195,12 +195,12 @@ if __name__ == "__main__":
     from optuna.storages import JournalFileStorage, JournalStorage
 
     # Cteate study object
-    study_name = f"dcl_{num_nodes}"
+    study_name = f"ssl_{num_nodes}"
     optuna_dir = f"optuna/{study_name}"
     os.makedirs(optuna_dir, exist_ok=True)
     storage = JournalStorage(JournalFileStorage(os.path.join(optuna_dir, "optuna.log")))
-    sampler = optuna.samplers.TPESampler(multivariate=True)
-    pruner = optuna.pruners.SuccessiveHalvingPruner()
+    sampler = optuna.samplers.BruteForceSampler()
+    pruner = optuna.pruners.NopPruner()
     study = optuna.create_study(
         storage=storage,
         study_name=study_name,
