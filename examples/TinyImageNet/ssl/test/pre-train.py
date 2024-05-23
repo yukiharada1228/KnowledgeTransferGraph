@@ -19,7 +19,7 @@ parser.add_argument("--seed", default=42)
 parser.add_argument("--model", default="resnet18")
 parser.add_argument("--ssl", default="SimCLR")
 parser.add_argument("--transforms", default="DINO")
-parser.add_argument("--accumulation_steps", default=2)
+parser.add_argument("--accumulation_steps", default=1)
 
 args = parser.parse_args()
 manual_seed = args.seed

@@ -70,11 +70,10 @@ class Edges(nn.Module):
             zip(outputs, self.criterions, self.gates)
         ):
             if i == model_id:
-                loss = gate(criterion(target_output, label), epoch)
-            elif gate.__class__.__name__ != "CutoffGate":
-                losses += [gate(criterion(target_output, source_output), epoch)]
-        if len(losses) > 0:
-            loss = loss + torch.stack(losses).mean()
+                losses.append(gate(criterion(target_output, label), epoch))
+            else:
+                losses.append(gate(criterion(target_output, source_output), epoch))
+        loss = torch.stack(losses).sum()
         return loss
 
 

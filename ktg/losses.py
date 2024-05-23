@@ -337,64 +337,53 @@ class DINOLoss(nn.Module):
 class MSELoss(nn.Module):
     def __init__(self):
         super(MSELoss, self).__init__()
-        # 損失関数
         self.criterion = nn.MSELoss()
 
     def forward(self, target_output, source_output):
-        # モデル1の特徴ベクトル
         z1_m1 = target_output[1]
         z2_m1 = target_output[2]
-        # モデル2の特徴ベクトル
-        z1_m2 = source_output[1].detach()
-        z2_m2 = source_output[2].detach()
+        z1_m2 = source_output[1]
+        z2_m2 = source_output[2]
 
-        # 特徴ベクトル(Projector)に関する知識転移1 : DisCOベース (同じサンプルに対する特徴量の違い)
-        #   出力の統合 -> [バッチ*2,次元数]
         fvec_m1 = torch.cat((z1_m1, z2_m1), dim=0)
         fvec_m2 = torch.cat((z1_m2, z2_m2), dim=0)
-        #   損失計算
+
         loss = self.criterion(fvec_m1, fvec_m2.detach())
         return loss
 
 
 class KLLoss(nn.Module):
-    def __init__(self, T=0.1, lam=1):
+    def __init__(self, T=1, lam=1):
         super(KLLoss, self).__init__()
-        self.criterion = nn.CosineSimilarity(dim=2)
-        self.T = T
+        self.similarity_f = nn.CosineSimilarity(dim=2)
+        self.criterion = KLDivLoss(T=T)
         self.lam = lam
 
     def forward(self, target_output, source_output):
-        z1_m1 = F.normalize(target_output[1], dim=-1)
-        z2_m1 = F.normalize(target_output[2], dim=-1)
-        z1_m2 = F.normalize(source_output[1].detach(), dim=-1)
-        z2_m2 = F.normalize(source_output[2].detach(), dim=-1)
+        z1_m1 = target_output[1]
+        z2_m1 = target_output[2]
+        z1_m2 = source_output[1]
+        z2_m2 = source_output[2]
 
-        sim_m1 = self.criterion(z1_m1.unsqueeze(1), z2_m1.unsqueeze(0))
-        sim_m2 = self.criterion(z1_m2.unsqueeze(1), z2_m2.unsqueeze(0))
+        sim_m1 = self.similarity_f(z1_m1.unsqueeze(1), z2_m1.unsqueeze(0))
+        sim_m2 = self.similarity_f(z1_m2.unsqueeze(1), z2_m2.unsqueeze(0))
 
-        log_prob_m1 = F.log_softmax(sim_m1 / self.T, dim=1)
-        prob_m2 = F.softmax(sim_m2 / self.T, dim=1)
-
-        loss = self.lam * F.kl_div(log_prob_m1, prob_m2.detach(), reduction="mean")
+        loss = self.lam * self.criterion(sim_m1, sim_m2)
         return loss
 
 
 class MSEKLLoss(nn.Module):
-    def __init__(self, mse_weight=1.0, kl_weight=1.0, kl_temperature=0.1):
+    def __init__(self, mse_weight=1.0, kl_weight=1.0, kl_temperature=1.0):
         super(MSEKLLoss, self).__init__()
-        # MSELossとKLLossのインスタンス化
         self.mse_loss = MSELoss()
         self.kl_loss = KLLoss(T=kl_temperature)
-        # 重み付け係数
+
         self.mse_weight = mse_weight
         self.kl_weight = kl_weight
 
     def forward(self, target_output, source_output):
-        # MSELossの計算
         mse_loss = self.mse_loss(target_output, source_output)
-        # KLLossの計算
         kl_loss = self.kl_loss(target_output, source_output)
-        # 二つの損失を足し合わせて2で割る
-        total_loss = (self.mse_weight * mse_loss + self.kl_weight * kl_loss) / 2.0
-        return total_loss
+
+        loss = self.mse_weight * mse_loss + self.kl_weight * kl_loss
+        return loss
