@@ -12,47 +12,6 @@ from torch.utils.tensorboard import SummaryWriter
 
 from ktg.utils import AverageMeter, accuracy, save_checkpoint
 
-# class Edges(nn.Module):
-#     def __init__(self, criterions, gates):
-#         super(Edges, self).__init__()
-#         self.criterions = criterions
-#         self.gates = gates
-
-#     def forward(self, model_id, outputs, labels, epoch):
-#         if model_id < 0 or model_id >= len(outputs):
-#             raise ValueError(f"Invalid model_id: {model_id}")
-
-#         losses = []
-#         losses_weight = []
-#         target_output = outputs[model_id]
-#         label = labels[model_id]
-
-#         for i, (source_output, criterion, gate) in enumerate(
-#             zip(outputs, self.criterions, self.gates)
-#         ):
-#             if i == model_id:
-#                 loss, loss_weight = self.calculate_loss(
-#                     criterion, gate, target_output, label, epoch
-#                 )
-#             else:
-#                 loss, loss_weight = self.calculate_loss(
-#                     criterion, gate, target_output, source_output, epoch
-#                 )
-
-#             losses.append(loss)
-#             losses_weight.append(loss_weight)
-
-#         total_loss = torch.stack(losses).mean()
-#         total_weight = sum(losses_weight)
-#         if total_weight > 0:
-#             total_loss /= total_weight
-
-#         return 2 * total_loss
-
-#     def calculate_loss(self, criterion, gate, output1, output2, epoch):
-#         loss = gate(criterion(output1, output2), epoch)
-#         return loss
-
 
 class Edges(nn.Module):
     def __init__(self, criterions, gates):

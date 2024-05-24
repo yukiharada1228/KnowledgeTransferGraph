@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from torchvision import datasets, transforms
 
 from ktg import Edges, KnowledgeTransferGraph, Node
 from ktg.dataset.cifar_datasets.cifar100 import get_datasets
@@ -29,7 +30,61 @@ wd = 7.310284744110568e-05
 # Prepare the CIFAR-100 for training
 batch_size = 64
 num_workers = 10
-train_dataset, val_dataset, _ = get_datasets()
+
+
+def get_datasets():
+    dataset = datasets.CIFAR100(
+        root="data", train=True, download=True, transform=transforms.ToTensor()
+    )
+    loader = DataLoader(dataset, batch_size=64)
+    h, w = 0, 0
+    for batch_idx, (inputs, _) in enumerate(loader):
+        inputs = inputs.cuda()
+        if batch_idx == 0:
+            h, w = inputs.size(2), inputs.size(3)
+            chsum = inputs.sum(dim=(0, 2, 3), keepdim=True)
+        else:
+            chsum += inputs.sum(dim=(0, 2, 3), keepdim=True)
+    mean = chsum / len(dataset) / h / w
+    chsum = None
+    for batch_idx, (inputs, _) in enumerate(loader):
+        inputs = inputs.cuda()
+        if batch_idx == 0:
+            chsum = (inputs - mean).pow(2).sum(dim=(0, 2, 3), keepdim=True)
+        else:
+            chsum += (inputs - mean).pow(2).sum(dim=(0, 2, 3), keepdim=True)
+    std = torch.sqrt(chsum / (len(dataset) * h * w - 1))
+
+    mean = mean.view(-1).cpu().numpy()
+    std = std.view(-1).cpu().numpy()
+    print("mean: %s" % mean)
+    print("std: %s" % std)
+
+    train_transform = transforms.Compose(
+        [
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean, std),
+        ]
+    )
+    test_transform = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Normalize(mean, std),
+        ]
+    )
+
+    train_dataset = datasets.CIFAR100(
+        root="data", train=True, download=True, transform=train_transform
+    )
+    test_dataset = datasets.CIFAR100(
+        root="data", train=False, download=True, transform=test_transform
+    )
+    return train_dataset, test_dataset
+
+
+train_dataset, val_dataset = get_datasets()
 train_dataloader = DataLoader(
     train_dataset,
     batch_size=batch_size,
@@ -69,8 +124,8 @@ nodes = []
 gates = [ThroughGate(max_epoch)]
 criterions = [nn.CrossEntropyLoss()]
 model = getattr(cifar_models, model_name)(num_classes).cuda()
-writer = SummaryWriter(f"runs/pre_train/{model_name}")
-save_dir = f"checkpoint/pre_train/{model_name}"
+writer = SummaryWriter(f"runs/pre-train/{model_name}")
+save_dir = f"checkpoint/pre-train/{model_name}"
 optimizer = getattr(torch.optim, optim_setting["name"])(
     model.parameters(), **optim_setting["args"]
 )

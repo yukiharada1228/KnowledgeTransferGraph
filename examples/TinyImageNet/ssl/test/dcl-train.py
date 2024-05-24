@@ -5,16 +5,17 @@ from copy import deepcopy
 
 import optuna
 import torch
+from optuna.storages import JournalFileStorage, JournalStorage
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+from torchvision import transforms
+
 from ktg import Edges, KnowledgeTransferGraph, Node, gates, losses
 from ktg.dataset.tinyimagenet import TinyImageNet
 from ktg.models import cifar_models, projector, ssl_models
 from ktg.transforms import ssl_transforms
 from ktg.utils import (AverageMeter, KNNValidation, WorkerInitializer,
                        load_checkpoint, set_seed)
-from optuna.storages import JournalFileStorage, JournalStorage
-from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
-from torchvision import transforms
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)

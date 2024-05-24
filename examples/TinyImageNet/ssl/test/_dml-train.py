@@ -12,18 +12,15 @@ from ktg import Edges, KnowledgeTransferGraph, Node, gates, losses
 from ktg.dataset.tinyimagenet import TinyImageNet
 from ktg.models import cifar_models, projector, ssl_models
 from ktg.transforms import ssl_transforms
-from ktg.utils import AverageMeter, KNNValidation, WorkerInitializer, set_seed
+from ktg.utils import (AverageMeter, KNNValidation, WorkerInitializer,
+                       load_checkpoint, set_seed)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
 parser.add_argument("--num-nodes", default=2)
 parser.add_argument("--model", default="resnet18")
-parser.add_argument("--ssl", default="DINO")
-parser.add_argument(
-    "--ssls",
-    default=["SimCLR", "MoCo", "SimSiam", "BYOL", "SwAV", "BarlowTwins", "DINO"],
-)
-parser.add_argument("--kd", default="MSEKLLoss")
+parser.add_argument("--ssl", default="SimCLR")
+parser.add_argument("--kd", default="KLLoss")
 parser.add_argument("--transforms", default="DINO")
 parser.add_argument("--accumulation_steps", default=1)
 
@@ -32,7 +29,6 @@ manual_seed = int(args.seed)
 num_nodes = int(args.num_nodes)
 model_name = args.model
 ssl_name = args.ssl
-ssls_name = args.ssls
 kd_name = args.kd
 transforms_name = args.transforms
 accumulation_steps = int(args.accumulation_steps)
@@ -41,8 +37,10 @@ accumulation_steps = int(args.accumulation_steps)
 def objective(trial):
     # Fix the seed value
     set_seed(manual_seed)
+
     batch_size = 256 // accumulation_steps
     num_workers = 10
+
     train_dataset = TinyImageNet("tiny-imagenet-200", split="train")
     val_dataset = TinyImageNet("tiny-imagenet-200", split="val")
     transform = getattr(ssl_transforms, f"{transforms_name}Transforms")(
@@ -50,10 +48,12 @@ def objective(trial):
     )
     train_dataset.transform = transform
     val_dataset.transform = transform
+
     knn_train_dataset = deepcopy(train_dataset)
     knn_val_dataset = deepcopy(val_dataset)
     knn_train_dataset.transform = transforms.ToTensor()
     knn_val_dataset.transform = transforms.ToTensor()
+
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=batch_size,
@@ -72,8 +72,10 @@ def objective(trial):
         drop_last=False,
         worker_init_fn=WorkerInitializer(manual_seed).worker_init_fn,
     )
+
     # Prepare for training
-    max_epoch = 800
+    max_epoch = 100
+
     optim_setting = {
         "name": "AdamW",
         "args": {
@@ -81,6 +83,8 @@ def objective(trial):
             "weight_decay": 1e-6,
         },
     }
+    lam = trial.suggest_float("lam", 0.001, 1000, log=True)
+    T = trial.suggest_float("T", 0.1, 1.0)
     nodes = []
     for i in range(num_nodes):
         gates_list = []
@@ -89,25 +93,31 @@ def objective(trial):
             if i == j:
                 criterions.append(getattr(losses, "SSLLoss")())
             else:
-                criterions.append(getattr(losses, kd_name)())
+                criterions.append(getattr(losses, kd_name)(T=T, lam=lam))
             gates_list.append(getattr(gates, "ThroughGate")(max_epoch))
-        if i == 0:
-            ssl = ssl_name
-        else:
-            ssl = trial.suggest_categorical(f"{i}_ssl", ssls_name)
-        model = getattr(ssl_models, ssl)(
+        model = getattr(ssl_models, ssl_name)(
             encoder_func=getattr(cifar_models, model_name),
             batch_size=batch_size,
             projector_func=getattr(projector, f"{ssl_name}Projector"),
         ).cuda()
+        if (
+            all(gate.__class__.__name__ == "CutoffGate" for gate in gates_list)
+            and i != 0
+        ):
+            load_checkpoint(
+                model=model,
+                save_dir=f"checkpoint/pre-train/{model_name}/{ssl_name}/{transforms_name}/{ssl_name}",
+                is_best=True,
+            )
         writer = SummaryWriter(
-            f"runs/dml_{num_nodes}_{ssl_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl}"
+            f"runs/dml_{num_nodes}/{ssl_name}/{ssl_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
         )
-        save_dir = f"checkpoint/dml_{num_nodes}_{ssl_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl}"
+        save_dir = f"checkpoint/dml_{num_nodes}/{ssl_name}/{ssl_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
         optimizer = getattr(torch.optim, optim_setting["name"])(
             model.parameters(), **optim_setting["args"]
         )
         edges = Edges(criterions, gates=gates_list)
+
         node = Node(
             model=model,
             writer=writer,
@@ -125,6 +135,7 @@ def objective(trial):
             ),
         )
         nodes.append(node)
+
     graph = KnowledgeTransferGraph(
         nodes=nodes,
         max_epoch=max_epoch,
@@ -138,15 +149,20 @@ def objective(trial):
 
 
 if __name__ == "__main__":
+
+    import os
+
     import optuna
     from optuna.storages import JournalFileStorage, JournalStorage
 
-    study_name = f"dml_{num_nodes}_{ssl_name}"
-    optuna_dir = f"optuna/{study_name}"
+    # Cteate study object
+    study_name = f"dml_{num_nodes}"
+    optuna_dir = f"optuna/{study_name}/{ssl_name}"
     os.makedirs(optuna_dir, exist_ok=True)
     storage = JournalStorage(JournalFileStorage(os.path.join(optuna_dir, "optuna.log")))
-    sampler = optuna.samplers.BruteForceSampler()
-    pruner = optuna.pruners.NopPruner()
+    sampler = optuna.samplers.TPESampler(multivariate=True)
+    pruner = optuna.pruners.SuccessiveHalvingPruner()
+    # pruner = optuna.pruners.NopPruner()
     study = optuna.create_study(
         storage=storage,
         study_name=study_name,
@@ -155,4 +171,5 @@ if __name__ == "__main__":
         direction="maximize",
         load_if_exists=True,
     )
+    # Start optimization
     study.optimize(objective)
