@@ -187,6 +187,21 @@ def bit_resnet32_b158(num_classes=10):
     return model
 
 
+def resnet44(num_classes=10):
+    """Constructs a ResNet-44 model for CIFAR-10 (by default)
+    Args:
+        num_classes (uint): number of classes
+    """
+    model = CifarResNet(ResNetBasicblock, 44, num_classes)
+    return model
+
+
+def bit_resnet44_b158(num_classes=10):
+    model = CifarResNet(ResNetBasicblock, 44, num_classes)
+    replace_layers_with_bitb158_layers(model)
+    return model
+
+
 def resnet56(num_classes=10):
     """Constructs a ResNet-56 model for CIFAR-10 (by default)
     Args:
@@ -213,6 +228,21 @@ def resnet110(num_classes=10):
 
 def bit_resnet110_b158(num_classes=10):
     model = CifarResNet(ResNetBasicblock, 110, num_classes)
+    replace_layers_with_bitb158_layers(model)
+    return model
+
+
+def resnet1202(num_classes=10):
+    """Constructs a ResNet-1202 model for CIFAR-10 (by default)
+    Args:
+        num_classes (uint): number of classes
+    """
+    model = CifarResNet(ResNetBasicblock, 1202, num_classes)
+    return model
+
+
+def bit_resnet1202_b158(num_classes=10):
+    model = CifarResNet(ResNetBasicblock, 1202, num_classes)
     replace_layers_with_bitb158_layers(model)
     return model
 
