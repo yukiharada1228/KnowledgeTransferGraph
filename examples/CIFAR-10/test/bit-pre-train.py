@@ -118,7 +118,7 @@ scheduler_setting = {
     "name": "CosineAnnealingLR",
     "args": {"T_max": max_epoch, "eta_min": 0.0},
 }
-num_classes = 100
+num_classes = 10
 nodes = []
 gates = [ThroughGate(max_epoch)]
 criterions = [nn.CrossEntropyLoss()]
