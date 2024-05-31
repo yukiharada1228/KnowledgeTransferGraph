@@ -274,6 +274,15 @@ def resnet34(num_classes=10):
     model.maxpool = nn.Identity()
     return model
 
+def bit_resnet34_b158(num_classes=10):
+    model = torchvision.models.resnet34(pretrained=False, num_classes=num_classes)
+    model.conv1 = nn.Conv2d(
+        3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+    )
+    model.maxpool = nn.Identity()
+    replace_layers_with_bitb158_layers(model)
+    return model
+
 
 def resnet50(num_classes=10):
     model = torchvision.models.resnet50(pretrained=False, num_classes=num_classes)
@@ -281,4 +290,13 @@ def resnet50(num_classes=10):
         3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
     )
     model.maxpool = nn.Identity()
+    return model
+
+def bit_resnet50_b158(num_classes=10):
+    model = torchvision.models.resnet50(pretrained=False, num_classes=num_classes)
+    model.conv1 = nn.Conv2d(
+        3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+    )
+    model.maxpool = nn.Identity()
+    replace_layers_with_bitb158_layers(model)
     return model

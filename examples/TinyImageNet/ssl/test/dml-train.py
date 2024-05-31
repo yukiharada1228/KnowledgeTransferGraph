@@ -18,12 +18,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
 parser.add_argument("--num-nodes", default=2)
 parser.add_argument("--model", default="resnet18")
-parser.add_argument("--ssl", default="DINO")
+parser.add_argument("--ssl", default="SwAV")
 parser.add_argument(
     "--ssls",
-    default=["SimCLR", "MoCo", "SimSiam", "BYOL", "SwAV", "BarlowTwins", "DINO"],
+    default=["SimCLR", "MoCo", "SimSiam", "BYOL", "SwAV", "BarlowTwins"],
 )
-parser.add_argument("--kd", default="MSEKLLoss")
+parser.add_argument("--kd", default="KLLoss")
 parser.add_argument("--transforms", default="DINO")
 parser.add_argument("--accumulation_steps", default=1)
 
@@ -89,7 +89,7 @@ def objective(trial):
             if i == j:
                 criterions.append(getattr(losses, "SSLLoss")())
             else:
-                criterions.append(getattr(losses, kd_name)())
+                criterions.append(getattr(losses, kd_name)(T=0.1, lam=1))
             gates_list.append(getattr(gates, "ThroughGate")(max_epoch))
         if i == 0:
             ssl = ssl_name

@@ -28,7 +28,7 @@ parser.add_argument(
 )
 parser.add_argument("--kds", default=["KLLoss"])
 parser.add_argument("--transforms", default="DINO")
-parser.add_argument("--accumulation_steps", default=2)
+parser.add_argument("--accumulation_steps", default=1)
 
 args = parser.parse_args()
 manual_seed = int(args.seed)
@@ -103,7 +103,7 @@ def objective(trial):
                 gates_list.append(getattr(gates, gate_name)(max_epoch))
             else:
                 loss_name = trial.suggest_categorical(f"{i}_{j}_loss", ["KLLoss"])
-                criterions.append(getattr(losses, loss_name)(lam=100))
+                criterions.append(getattr(losses, loss_name)())
                 gamma = trial.suggest_float(f"{i}_{j}_gamma", 0.01, 100, log=True)
                 gate_name = trial.suggest_categorical(f"{i}_{j}_gate", gates_name)
                 gates_list.append(getattr(gates, gate_name)(max_epoch, gamma))
@@ -120,13 +120,13 @@ def objective(trial):
         ):
             load_checkpoint(
                 model=model,
-                save_dir=f"checkpoint/pre-train/{model_name}/{ssl_name}/{transforms_name}/{ssl_name}",
+                save_dir=f"checkpoint/pre-train/{model_name}/{transforms_name}/{ssl_name}",
                 is_best=True,
             )
         writer = SummaryWriter(
-            f"runs/dcl_{num_nodes}/{ssl_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
+            f"runs/dcl_{num_nodes}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
         )
-        save_dir = f"checkpoint/dcl_{num_nodes}/{ssl_name}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
+        save_dir = f"checkpoint/dcl_{num_nodes}/{transforms_name}/{trial.number:04}/{i}_{model_name}_{ssl_name}"
         optimizer = getattr(torch.optim, optim_setting["name"])(
             model.parameters(), **optim_setting["args"]
         )
