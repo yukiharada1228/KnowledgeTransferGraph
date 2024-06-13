@@ -274,6 +274,7 @@ def resnet34(num_classes=10):
     model.maxpool = nn.Identity()
     return model
 
+
 def bit_resnet34_b158(num_classes=10):
     model = torchvision.models.resnet34(pretrained=False, num_classes=num_classes)
     model.conv1 = nn.Conv2d(
@@ -291,6 +292,7 @@ def resnet50(num_classes=10):
     )
     model.maxpool = nn.Identity()
     return model
+
 
 def bit_resnet50_b158(num_classes=10):
     model = torchvision.models.resnet50(pretrained=False, num_classes=num_classes)

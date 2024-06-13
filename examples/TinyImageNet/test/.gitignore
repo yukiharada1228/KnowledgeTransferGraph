@@ -1,10 +1,6 @@
 tiny-imagenet-200
-optuna
-runs
 checkpoint
-
-tiny-imagenet-200.zip
-datasets
+runs
 
 *.svg
 *.pdf

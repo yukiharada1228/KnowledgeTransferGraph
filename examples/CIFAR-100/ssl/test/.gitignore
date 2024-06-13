@@ -1,7 +1,6 @@
-data
-optuna
-runs
 checkpoint
+data
+runs
 
 *.svg
 *.pdf

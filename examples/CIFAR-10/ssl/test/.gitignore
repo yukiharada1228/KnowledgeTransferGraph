@@ -2,3 +2,7 @@ data
 optuna
 runs
 checkpoint
+
+*.svg
+*.pdf
+*.png

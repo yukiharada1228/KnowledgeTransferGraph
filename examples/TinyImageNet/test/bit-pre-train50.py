@@ -11,7 +11,8 @@ from ktg import Edges, KnowledgeTransferGraph, Node
 from ktg.dataset.tinyimagenet import TinyImageNet
 from ktg.gates import ThroughGate
 from ktg.models import cifar_models
-from ktg.utils import AverageMeter, WorkerInitializer, set_seed, get_cosine_schedule_with_warmup
+from ktg.utils import (AverageMeter, WorkerInitializer,
+                       get_cosine_schedule_with_warmup, set_seed)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
@@ -33,7 +34,9 @@ num_workers = 10
 
 
 def get_datasets():
-    dataset = TinyImageNet("tiny-imagenet-200", split="train", transform=transforms.ToTensor())
+    dataset = TinyImageNet(
+        "tiny-imagenet-200", split="train", transform=transforms.ToTensor()
+    )
     loader = DataLoader(dataset, batch_size=64)
     h, w = 0, 0
     for batch_idx, (inputs, _) in enumerate(loader):
@@ -73,8 +76,12 @@ def get_datasets():
         ]
     )
 
-    train_dataset = TinyImageNet("tiny-imagenet-200", split="train", transform=train_transform)
-    test_dataset = TinyImageNet("tiny-imagenet-200", split="val", transform=test_transform)
+    train_dataset = TinyImageNet(
+        "tiny-imagenet-200", split="train", transform=train_transform
+    )
+    test_dataset = TinyImageNet(
+        "tiny-imagenet-200", split="val", transform=test_transform
+    )
     return train_dataset, test_dataset
 
 

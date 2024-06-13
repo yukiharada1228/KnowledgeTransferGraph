@@ -3,21 +3,21 @@ import argparse
 
 import torch
 import torch.nn as nn
+import torchvision.datasets as datasets
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 
 from ktg import Edges, KnowledgeTransferGraph, Node
-from ktg.dataset.tinyimagenet import TinyImageNet
 from ktg.gates import ThroughGate
-from ktg.models import cifar_models
+from ktg.models import imagenet_models
 from ktg.utils import AverageMeter, WorkerInitializer, set_seed
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
 parser.add_argument("--lr", default=0.1)
-parser.add_argument("--wd", default=5e-4)
-parser.add_argument("--model", default="resnet18")
+parser.add_argument("--wd", default=1e-4)
+parser.add_argument("--model", default="resnet152")
 
 args = parser.parse_args()
 manualSeed = int(args.seed)
@@ -28,86 +28,51 @@ wd = float(args.wd)
 # Fix the seed value
 set_seed(manualSeed)
 
-# Prepare the CIFAR-100 for training
-batch_size = 64
+# Prepare the ImageNet1k for training
+batch_size = 256
 num_workers = 10
 
-
-def get_datasets():
-    dataset = TinyImageNet(
-        "tiny-imagenet-200", split="train", transform=transforms.ToTensor()
-    )
-    loader = DataLoader(dataset, batch_size=64)
-    h, w = 0, 0
-    for batch_idx, (inputs, _) in enumerate(loader):
-        inputs = inputs.cuda()
-        if batch_idx == 0:
-            h, w = inputs.size(2), inputs.size(3)
-            chsum = inputs.sum(dim=(0, 2, 3), keepdim=True)
-        else:
-            chsum += inputs.sum(dim=(0, 2, 3), keepdim=True)
-    mean = chsum / len(dataset) / h / w
-    chsum = None
-    for batch_idx, (inputs, _) in enumerate(loader):
-        inputs = inputs.cuda()
-        if batch_idx == 0:
-            chsum = (inputs - mean).pow(2).sum(dim=(0, 2, 3), keepdim=True)
-        else:
-            chsum += (inputs - mean).pow(2).sum(dim=(0, 2, 3), keepdim=True)
-    std = torch.sqrt(chsum / (len(dataset) * h * w - 1))
-
-    mean = mean.view(-1).cpu().numpy()
-    std = std.view(-1).cpu().numpy()
-    print("mean: %s" % mean)
-    print("std: %s" % std)
-
-    train_transform = transforms.Compose(
-        [
-            transforms.RandomCrop(64, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean, std),
-        ]
-    )
-    test_transform = transforms.Compose(
-        [
-            transforms.ToTensor(),
-            transforms.Normalize(mean, std),
-        ]
-    )
-
-    train_dataset = TinyImageNet(
-        "tiny-imagenet-200", split="train", transform=train_transform
-    )
-    test_dataset = TinyImageNet(
-        "tiny-imagenet-200", split="val", transform=test_transform
-    )
-    return train_dataset, test_dataset
-
-
-train_dataset, val_dataset = get_datasets()
-
+normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 train_dataloader = DataLoader(
-    train_dataset,
+    datasets.ImageFolder(
+        "./dataset/imagenet_data/train",
+        transforms.Compose(
+            [
+                transforms.RandomResizedCrop(224),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                normalize,
+            ]
+        ),
+    ),
     batch_size=batch_size,
     shuffle=True,
     num_workers=num_workers,
     pin_memory=True,
-    drop_last=True,
     worker_init_fn=WorkerInitializer(manualSeed).worker_init_fn,
 )
+
 val_dataloader = DataLoader(
-    val_dataset,
+    datasets.ImageFolder(
+        "./dataset/imagenet_data/val",
+        transforms.Compose(
+            [
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                normalize,
+            ]
+        ),
+    ),
     batch_size=batch_size,
     shuffle=False,
     num_workers=num_workers,
     pin_memory=True,
-    drop_last=False,
     worker_init_fn=WorkerInitializer(manualSeed).worker_init_fn,
 )
 
 # Prepare for training
-max_epoch = 200
+max_epoch = 90
 
 optim_setting = {
     "name": "SGD",
@@ -123,12 +88,12 @@ scheduler_setting = {
     "args": {"T_max": max_epoch, "eta_min": 0.0},
 }
 
-num_classes = 200
+num_classes = 1000
 nodes = []
 
 gates = [ThroughGate(max_epoch)]
 criterions = [nn.CrossEntropyLoss()]
-model = getattr(cifar_models, model_name)(num_classes).cuda()
+model = torch.nn.DataParallel(getattr(imagenet_models, model_name)(num_classes)).cuda()
 writer = SummaryWriter(f"runs/pre-train/{model_name}")
 save_dir = f"checkpoint/pre-train/{model_name}"
 optimizer = getattr(torch.optim, optim_setting["name"])(
