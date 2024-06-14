@@ -11,7 +11,8 @@ from torchvision import transforms
 from ktg import Edges, KnowledgeTransferGraph, Node
 from ktg.gates import ThroughGate
 from ktg.models import imagenet_models
-from ktg.utils import AverageMeter, WorkerInitializer, set_seed
+from ktg.utils import (AverageMeter, WorkerInitializer,
+                       get_cosine_schedule_with_warmup, set_seed)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
@@ -84,8 +85,13 @@ optim_setting = {
     },
 }
 scheduler_setting = {
-    "name": "CosineAnnealingLR",
-    "args": {"T_max": max_epoch, "eta_min": 0.0},
+    "name": "get_cosine_schedule_with_warmup",
+    "args": {
+        "num_warmup_steps": 10,
+        "num_training_steps": max_epoch,
+        "num_cycles": 0.5,
+        "last_epoch": -1,
+    },
 }
 
 num_classes = 1000
@@ -99,10 +105,9 @@ save_dir = f"checkpoint/pre-train/{model_name}"
 optimizer = getattr(torch.optim, optim_setting["name"])(
     model.parameters(), **optim_setting["args"]
 )
-scheduler = getattr(torch.optim.lr_scheduler, scheduler_setting["name"])(
-    optimizer, **scheduler_setting["args"]
-)
+scheduler = get_cosine_schedule_with_warmup(optimizer, **scheduler_setting["args"])
 edges = Edges(criterions, gates)
+
 
 class WeightDecayScheduler:
     def __init__(self, optimizer, total_steps, decay_start_step, last_epoch=-1):
@@ -125,6 +130,7 @@ class WeightDecayScheduler:
             self.optimizer.param_groups, self.base_weight_decays
         ):
             param_group["weight_decay"] = weight_decay
+
 
 start_rate = 2
 wdscheduler = WeightDecayScheduler(
