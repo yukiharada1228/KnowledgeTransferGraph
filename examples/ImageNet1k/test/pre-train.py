@@ -3,20 +3,21 @@ import argparse
 
 import torch
 import torch.nn as nn
+import torchvision.datasets as datasets
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from torchvision import transforms
 
 from ktg import Edges, KnowledgeTransferGraph, Node
-from ktg.dataset.cifar_datasets.cifar100 import get_datasets
 from ktg.gates import ThroughGate
-from ktg.models import cifar_models
+from ktg.models import imagenet_models
 from ktg.utils import AverageMeter, WorkerInitializer, set_seed
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
 parser.add_argument("--lr", default=0.1)
-parser.add_argument("--wd", default=5e-4)
-parser.add_argument("--model", default="resnet32")
+parser.add_argument("--wd", default=1e-4)
+parser.add_argument("--model", default="resnet152")
 
 args = parser.parse_args()
 manualSeed = int(args.seed)
@@ -27,33 +28,51 @@ wd = float(args.wd)
 # Fix the seed value
 set_seed(manualSeed)
 
-# Prepare the CIFAR-100 for training
-batch_size = 64
+# Prepare the ImageNet1k for training
+batch_size = 256
 num_workers = 10
 
-train_dataset, val_dataset, _ = get_datasets()
-
+normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 train_dataloader = DataLoader(
-    train_dataset,
+    datasets.ImageFolder(
+        "./dataset/imagenet_data/train",
+        transforms.Compose(
+            [
+                transforms.RandomResizedCrop(224),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                normalize,
+            ]
+        ),
+    ),
     batch_size=batch_size,
     shuffle=True,
     num_workers=num_workers,
     pin_memory=True,
-    drop_last=True,
     worker_init_fn=WorkerInitializer(manualSeed).worker_init_fn,
 )
+
 val_dataloader = DataLoader(
-    val_dataset,
+    datasets.ImageFolder(
+        "./dataset/imagenet_data/val",
+        transforms.Compose(
+            [
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                normalize,
+            ]
+        ),
+    ),
     batch_size=batch_size,
     shuffle=False,
     num_workers=num_workers,
     pin_memory=True,
-    drop_last=False,
     worker_init_fn=WorkerInitializer(manualSeed).worker_init_fn,
 )
 
 # Prepare for training
-max_epoch = 200
+max_epoch = 90
 
 optim_setting = {
     "name": "SGD",
@@ -69,12 +88,12 @@ scheduler_setting = {
     "args": {"T_max": max_epoch, "eta_min": 0.0},
 }
 
-num_classes = 100
+num_classes = 1000
 nodes = []
 
 gates = [ThroughGate(max_epoch)]
 criterions = [nn.CrossEntropyLoss()]
-model = getattr(cifar_models, model_name)(num_classes).cuda()
+model = torch.nn.DataParallel(getattr(imagenet_models, model_name)(num_classes)).cuda()
 writer = SummaryWriter(f"runs/pre-train/{model_name}")
 save_dir = f"checkpoint/pre-train/{model_name}"
 optimizer = getattr(torch.optim, optim_setting["name"])(

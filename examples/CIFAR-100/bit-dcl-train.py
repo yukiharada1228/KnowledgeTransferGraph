@@ -18,11 +18,11 @@ from ktg.utils import (AverageMeter, WorkerInitializer, load_checkpoint,
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
-parser.add_argument("--num-nodes", default=3)
-parser.add_argument("--n_trials", default=1500)
+parser.add_argument("--num-nodes", default=7)
+parser.add_argument("--n_trials", default=300)
 parser.add_argument(
     "--models",
-    default=["resnet32", "resnet110", "wideresnet28_2"],
+    default=["bit_resnet32_b158", "resnet32", "resnet56", "wideresnet28_2"],
     nargs="*",
     type=str,
 )
@@ -73,15 +73,6 @@ def objective(trial):
     # Prepare for training
     max_epoch = 200
 
-    optim_setting = {
-        "name": "SGD",
-        "args": {
-            "lr": 0.1,
-            "momentum": 0.9,
-            "weight_decay": 5e-4,
-            "nesterov": True,
-        },
-    }
     scheduler_setting = {
         "name": "CosineAnnealingLR",
         "args": {"T_max": max_epoch, "eta_min": 0.0},
@@ -104,7 +95,7 @@ def objective(trial):
             gate = getattr(gates, gate_name)(max_epoch)
             gates_list.append(gate)
         if i == 0:
-            model_name = models_name[0]
+            model_name = trial.suggest_categorical(f"{i}_model", models_name[0:1])
         else:
             model_name = trial.suggest_categorical(f"{i}_model", models_name)
         model = getattr(cifar_models, model_name)(num_classes).cuda()
@@ -116,12 +107,69 @@ def objective(trial):
                 model=model, save_dir=f"checkpoint/pre-train/{model_name}", is_best=True
             )
         writer = SummaryWriter(
-            f"runs/ta_{num_nodes}/{trial.number:04}/{i}_{model_name}"
+            f"runs/bit_dcl_{num_nodes}/{trial.number:04}/{i}_{model_name}"
         )
-        save_dir = f"checkpoint/ta_{num_nodes}/{trial.number:04}/{i}_{model_name}"
-        optimizer = getattr(torch.optim, optim_setting["name"])(
-            model.parameters(), **optim_setting["args"]
-        )
+        save_dir = f"checkpoint/bit_dcl_{num_nodes}/{trial.number:04}/{i}_{model_name}"
+
+        if "bit" in model_name:
+            optim_setting = {
+                "name": "SGD",
+                "args": {
+                    "lr": 0.45422698806566725 / 2,
+                    "momentum": 0.9,
+                    "weight_decay": 7.310284744110568e-05,
+                    "nesterov": True,
+                },
+            }
+            start_rate = 2
+
+            class WeightDecayScheduler:
+                def __init__(
+                    self, optimizer, total_steps, decay_start_step, last_epoch=-1
+                ):
+                    self.optimizer = optimizer
+                    self.decay_start_step = decay_start_step
+                    self.total_steps = total_steps
+                    self.last_epoch = last_epoch
+                    self.base_weight_decays = [
+                        group["weight_decay"] for group in optimizer.param_groups
+                    ]
+
+                def step(self, current_step):
+                    if current_step >= self.decay_start_step:
+                        weight_decay = 0.0
+                    else:
+                        weight_decay = self.base_weight_decays[
+                            0
+                        ]  # Assuming all groups have the same weight decay
+
+                    for param_group, base_weight_decay in zip(
+                        self.optimizer.param_groups, self.base_weight_decays
+                    ):
+                        param_group["weight_decay"] = weight_decay
+
+            optimizer = getattr(torch.optim, optim_setting["name"])(
+                model.parameters(), **optim_setting["args"]
+            )
+            wdscheduler = WeightDecayScheduler(
+                optimizer=optimizer,
+                total_steps=max_epoch,
+                decay_start_step=max_epoch // start_rate,
+            )
+        else:
+            optim_setting = {
+                "name": "SGD",
+                "args": {
+                    "lr": 0.1,
+                    "momentum": 0.9,
+                    "weight_decay": 5e-4,
+                    "nesterov": True,
+                },
+            }
+            wdscheduler = None
+            optimizer = getattr(torch.optim, optim_setting["name"])(
+                model.parameters(), **optim_setting["args"]
+            )
         scheduler = getattr(torch.optim.lr_scheduler, scheduler_setting["name"])(
             optimizer, **scheduler_setting["args"]
         )
@@ -134,6 +182,7 @@ def objective(trial):
             save_dir=save_dir,
             optimizer=optimizer,
             scheduler=scheduler,
+            wdscheduler=wdscheduler,
             edges=edges,
             loss_meter=AverageMeter(),
             top1_meter=AverageMeter(),
@@ -153,7 +202,7 @@ def objective(trial):
 
 if __name__ == "__main__":
     # Cteate study object
-    study_name = f"ta_{num_nodes}"
+    study_name = f"bit_dcl_{num_nodes}"
     optuna_dir = f"optuna/{study_name}"
     os.makedirs(optuna_dir, exist_ok=True)
     storage = JournalStorage(JournalFileStorage(os.path.join(optuna_dir, "optuna.log")))

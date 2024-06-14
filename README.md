@@ -12,6 +12,11 @@ This repository implements the "Knowledge Transfer Graph for Deep Collaborative 
 ## Replace CorrectGate with NegativeLinearGate
 The original CorrectGate was replaced by NegativeLinearGate in the implementation. This change was made to specifically enhance the model's performance in controlling knowledge transfer along the temporal dimension, with the aim of improving overall accuracy.
 
+## Self-Supervised Collaborative Learning
+In addition to the original Knowledge Transfer Graph framework, this implementation integrates various state-of-the-art self-supervised learning methods, including SimCLR, MoCo, SimSiam, BYOL, Barlow Twins, SwAV, and DINO. These self-supervised learning techniques are utilized to enhance the model's feature representations by leveraging unlabeled data. By training the model to predict transformations or generate useful representations from unlabeled data, it gains a deeper understanding of the underlying structure of the data, leading to improved performance and robustness.
+
+By incorporating these state-of-the-art self-supervised learning techniques into the Knowledge Transfer Graph framework, the model becomes more adept at capturing intricate patterns and structures in the data, leading to improved performance across various tasks and datasets.
+
 ## Usage
 To use the Knowledge Transfer Graph in your project, follow these steps:
 1. Clone the repository:

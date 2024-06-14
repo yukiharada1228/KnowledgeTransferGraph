@@ -1,0 +1,7 @@
+tiny-imagenet-200
+checkpoint
+runs
+
+*.svg
+*.pdf
+*.png

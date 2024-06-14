@@ -7,7 +7,7 @@ from ..custom_dataset import CustomDataset
 
 
 def get_datasets():
-    dataset = datasets.CIFAR100(root="data", train=True, download=True)
+    dataset = datasets.CIFAR10(root="data", train=True, download=True)
     lengths = [40000, 10000]
     subsets = random_split(dataset, lengths)
     loader = DataLoader(
@@ -54,7 +54,7 @@ def get_datasets():
 
     train_dataset = CustomDataset(subsets[0], transform=train_transform)
     val_dataset = CustomDataset(subsets[1], transform=test_transform)
-    test_dataset = datasets.CIFAR100(
+    test_dataset = datasets.CIFAR10(
         root="data", train=True, download=True, transform=test_transform
     )
     return train_dataset, val_dataset, test_dataset

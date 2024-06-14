@@ -4,7 +4,6 @@ name = "ktg"
 description = "KnowledgeTransferGraph"
 readme = "README.md"
 requires-python = ">=3.8"
-license = {file = "LICENSE"}
 authors = [
   {name = "Yuki Harada", email = "yukiharada1228@gmail.com"},
 ]
