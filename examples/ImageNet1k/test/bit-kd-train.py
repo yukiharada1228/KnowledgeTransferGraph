@@ -21,7 +21,7 @@ from ktg.utils import (AverageMeter, WorkerInitializer,
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
 parser.add_argument("--num-nodes", default=2)
-parser.add_argument("--n_trials", default=30)
+parser.add_argument("--n_trials", default=1)
 parser.add_argument(
     "--models",
     default=["bit_resnet152_b158", "resnet152"],
