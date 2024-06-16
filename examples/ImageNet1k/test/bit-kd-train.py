@@ -13,7 +13,7 @@ from torchvision import transforms
 
 from ktg import Edges, KnowledgeTransferGraph, Node, gates
 from ktg.losses import KLDivLoss
-from ktg.models import cifar_models
+from ktg.models import imagenet_models
 from ktg.utils import (AverageMeter, WorkerInitializer,
                        get_cosine_schedule_with_warmup, load_checkpoint,
                        set_seed)
@@ -94,7 +94,7 @@ def objective(trial):
     # Prepare for training
     max_epoch = 90
 
-    num_classes = 100
+    num_classes = 1000
     nodes = []
     for i in range(num_nodes):
         gates_list = []
@@ -121,7 +121,7 @@ def objective(trial):
         else:
             model_name = trial.suggest_categorical(f"{i}_model", models_name[1:])
         model = torch.nn.DataParallel(
-            getattr(cifar_models, model_name)(num_classes)
+            getattr(imagenet_models, model_name)(num_classes)
         ).cuda()
         if (
             all(gate.__class__.__name__ == "CutoffGate" for gate in gates_list)
