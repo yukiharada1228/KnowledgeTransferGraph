@@ -1,0 +1,226 @@
+# Import packages
+import argparse
+import os
+
+import optuna
+import torch
+import torch.nn as nn
+import torchvision.datasets as datasets
+from optuna.storages import JournalFileStorage, JournalStorage
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+from torchvision import transforms
+
+from ktg import Edges, KnowledgeTransferGraph, Node, gates
+from ktg.losses import KLDivLoss
+from ktg.models import imagenet_models
+from ktg.utils import (AverageMeter, WorkerInitializer,
+                       get_cosine_schedule_with_warmup, load_checkpoint,
+                       set_seed)
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--seed", default=42)
+parser.add_argument("--num-nodes", default=2)
+parser.add_argument("--n_trials", default=1)
+parser.add_argument(
+    "--models",
+    default=["bit_resnet152_b158", "resnet152"],
+    nargs="*",
+    type=str,
+)
+parser.add_argument(
+    "--gates",
+    default=["ThroughGate", "CutoffGate"],
+    nargs="*",
+    type=str,
+)
+
+args = parser.parse_args()
+manualSeed = int(args.seed)
+num_nodes = int(args.num_nodes)
+n_trials = int(args.n_trials)
+models_name = args.models
+gates_name = args.gates
+
+
+def objective(trial):
+    # Fix the seed value
+    set_seed(manualSeed)
+
+    # Prepare the ImageNet1k for training
+    batch_size = 256
+    num_workers = 10
+
+    normalize = transforms.Normalize(
+        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+    )
+    train_dataloader = DataLoader(
+        datasets.ImageFolder(
+            "./dataset/imagenet_data/train",
+            transforms.Compose(
+                [
+                    transforms.RandomResizedCrop(224),
+                    transforms.RandomHorizontalFlip(),
+                    transforms.ToTensor(),
+                    normalize,
+                ]
+            ),
+        ),
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+        worker_init_fn=WorkerInitializer(manualSeed).worker_init_fn,
+    )
+
+    val_dataloader = DataLoader(
+        datasets.ImageFolder(
+            "./dataset/imagenet_data/val",
+            transforms.Compose(
+                [
+                    transforms.Resize(256),
+                    transforms.CenterCrop(224),
+                    transforms.ToTensor(),
+                    normalize,
+                ]
+            ),
+        ),
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+        worker_init_fn=WorkerInitializer(manualSeed).worker_init_fn,
+    )
+    # Prepare for training
+    max_epoch = 90
+
+    num_classes = 1000
+    nodes = []
+    for i in range(num_nodes):
+        gates_list = []
+        criterions = []
+        for j in range(num_nodes):
+            if i == j:
+                criterions.append(nn.CrossEntropyLoss())
+            else:
+                criterions.append(KLDivLoss())
+            if i == 1:
+                gate_name = trial.suggest_categorical(
+                    f"{i}_{j}_gate",
+                    gates_name[1:],
+                )
+            else:
+                gate_name = trial.suggest_categorical(
+                    f"{i}_{j}_gate",
+                    gates_name[0:1],
+                )
+            gate = getattr(gates, gate_name)(max_epoch)
+            gates_list.append(gate)
+        if i == 0:
+            model_name = trial.suggest_categorical(f"{i}_model", models_name[0:1])
+        else:
+            model_name = trial.suggest_categorical(f"{i}_model", models_name[1:])
+        model = torch.nn.DataParallel(
+            getattr(imagenet_models, model_name)(num_classes)
+        ).cuda()
+        if (
+            all(gate.__class__.__name__ == "CutoffGate" for gate in gates_list)
+            and i != 0
+        ):
+            load_checkpoint(
+                model=model, save_dir=f"checkpoint/pre-train/{model_name}", is_best=True
+            )
+        writer = SummaryWriter(
+            f"runs/bit_kd_without_wdscheduler_{num_nodes}/{trial.number:04}/{i}_{model_name}"
+        )
+        save_dir = f"checkpoint/bit_kd_without_wdscheduler_{num_nodes}/{trial.number:04}/{i}_{model_name}"
+
+        if "bit" in model_name:
+            optim_setting = {
+                "name": "SGD",
+                "args": {
+                    "lr": 0.45 / 2,
+                    "momentum": 0.9,
+                    "weight_decay": 3e-5,
+                    "nesterov": True,
+                },
+            }
+            scheduler_setting = {
+                "name": "get_cosine_schedule_with_warmup",
+                "args": {
+                    "num_warmup_steps": 10,
+                    "num_training_steps": max_epoch,
+                    "num_cycles": 0.5,
+                    "last_epoch": -1,
+                },
+            }
+            optimizer = getattr(torch.optim, optim_setting["name"])(
+                model.parameters(), **optim_setting["args"]
+            )
+            scheduler = get_cosine_schedule_with_warmup(
+                optimizer, **scheduler_setting["args"]
+            )
+        else:
+            optim_setting = {
+                "name": "SGD",
+                "args": {
+                    "lr": 0.1,
+                    "momentum": 0.9,
+                    "weight_decay": 1e-4,
+                    "nesterov": True,
+                },
+            }
+            scheduler_setting = {
+                "name": "CosineAnnealingLR",
+                "args": {"T_max": max_epoch, "eta_min": 0.0},
+            }
+            optimizer = getattr(torch.optim, optim_setting["name"])(
+                model.parameters(), **optim_setting["args"]
+            )
+            scheduler = getattr(torch.optim.lr_scheduler, scheduler_setting["name"])(
+                optimizer, **scheduler_setting["args"]
+            )
+        edges = Edges(criterions, gates=gates_list)
+
+        node = Node(
+            model=model,
+            writer=writer,
+            scaler=torch.cuda.amp.GradScaler(),
+            save_dir=save_dir,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            edges=edges,
+            loss_meter=AverageMeter(),
+            top1_meter=AverageMeter(),
+        )
+        nodes.append(node)
+
+    graph = KnowledgeTransferGraph(
+        nodes=nodes,
+        max_epoch=max_epoch,
+        train_dataloader=train_dataloader,
+        test_dataloader=val_dataloader,
+        trial=trial,
+    )
+    best_top1 = graph.train()
+    return best_top1
+
+
+if __name__ == "__main__":
+    # Cteate study object
+    study_name = f"bit_kd_without_wdscheduler_{num_nodes}"
+    optuna_dir = f"optuna/{study_name}"
+    os.makedirs(optuna_dir, exist_ok=True)
+    storage = JournalStorage(JournalFileStorage(os.path.join(optuna_dir, "optuna.log")))
+    sampler = optuna.samplers.BruteForceSampler()
+    pruner = optuna.pruners.NopPruner()
+    study = optuna.create_study(
+        storage=storage,
+        study_name=study_name,
+        sampler=sampler,
+        pruner=pruner,
+        direction="maximize",
+        load_if_exists=True,
+    )
+    # Start optimization
+    study.optimize(objective, n_trials=n_trials)
