@@ -58,8 +58,6 @@ def main():
         help="Optuna study 名。未指定時は dcl_{num_nodes} を使用",
     )
     parser.add_argument("--max-epoch", type=int, default=200)
-    parser.add_argument("--train-batch-size", type=int, default=64)
-    parser.add_argument("--train-num-workers", type=int, default=10)
     args = parser.parse_args()
 
     set_seed(args.seed)
@@ -96,9 +94,9 @@ def main():
     train_dataset, test_dataset = get_datasets(use_test_mode=True)
     train_loader = DataLoader(
         train_dataset,
-        batch_size=args.train_batch_size,
+        batch_size=args.batch_size,
         shuffle=True,
-        num_workers=args.train_num_workers,
+        num_workers=args.num_workers,
         pin_memory=True,
         drop_last=True,
         worker_init_fn=WorkerInitializer(args.seed).worker_init_fn,
