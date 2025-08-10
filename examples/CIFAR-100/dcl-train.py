@@ -9,12 +9,11 @@ from optuna.storages import JournalFileStorage, JournalStorage
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from ktg import Edges, KnowledgeTransferGraph, Node, gates
+from ktg import Edge, KnowledgeTransferGraph, Node, gates
 from ktg.dataset.cifar_datasets.cifar100 import get_datasets
 from ktg.losses import KLDivLoss
 from ktg.models import cifar_models
-from ktg.utils import (AverageMeter, WorkerInitializer, load_checkpoint,
-                       set_seed)
+from ktg.utils import AverageMeter, WorkerInitializer, load_checkpoint, set_seed
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", default=42)
@@ -49,7 +48,7 @@ def objective(trial):
     batch_size = 64
     num_workers = 10
 
-    train_dataset, val_dataset, _ = get_datasets()
+    train_dataset, val_dataset = get_datasets()
 
     train_dataloader = DataLoader(
         train_dataset,
@@ -125,7 +124,7 @@ def objective(trial):
         scheduler = getattr(torch.optim.lr_scheduler, scheduler_setting["name"])(
             optimizer, **scheduler_setting["args"]
         )
-        edges = Edges(criterions, gates=gates_list)
+        edges = [Edge(c, g) for c, g in zip(criterions, gates_list)]
 
         node = Node(
             model=model,
@@ -136,7 +135,7 @@ def objective(trial):
             scheduler=scheduler,
             edges=edges,
             loss_meter=AverageMeter(),
-            top1_meter=AverageMeter(),
+            score_meter=AverageMeter(),
         )
         nodes.append(node)
 
@@ -147,8 +146,8 @@ def objective(trial):
         test_dataloader=val_dataloader,
         trial=trial,
     )
-    best_top1 = graph.train()
-    return best_top1
+    best_score = graph.train()
+    return best_score
 
 
 if __name__ == "__main__":
@@ -158,7 +157,7 @@ if __name__ == "__main__":
     os.makedirs(optuna_dir, exist_ok=True)
     storage = JournalStorage(JournalFileStorage(os.path.join(optuna_dir, "optuna.log")))
     sampler = optuna.samplers.TPESampler(multivariate=True)
-    pruner = optuna.pruners.SuccessiveHalvingPruner()
+    pruner = optuna.pruners.HyperbandPruner()
     study = optuna.create_study(
         storage=storage,
         study_name=study_name,

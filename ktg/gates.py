@@ -15,8 +15,8 @@ class CutoffGate(nn.Module):
         super(CutoffGate, self).__init__()
 
     def forward(self, loss, epoch):
-        loss = torch.zeros_like(loss, requires_grad=True)
-        return loss
+        # 勾配寄与を完全に無効化
+        return loss.detach() * 0.0
 
 
 class PositiveLinearGate(nn.Module):
@@ -25,9 +25,12 @@ class PositiveLinearGate(nn.Module):
         self.max_epoch = max_epoch
 
     def forward(self, loss, epoch):
-        loss_weight = epoch / self.max_epoch
-        loss *= loss_weight
-        return loss
+        # 0 -> 1 の線形スケジュール（最終epochで1になるように正規化）
+        if self.max_epoch <= 1:
+            loss_weight = float(epoch > 0)
+        else:
+            loss_weight = epoch / (self.max_epoch - 1)
+        return loss * loss_weight
 
 
 class NegativeLinearGate(nn.Module):
@@ -36,32 +39,11 @@ class NegativeLinearGate(nn.Module):
         self.max_epoch = max_epoch
 
     def forward(self, loss, epoch):
-        loss_weight = (self.max_epoch - epoch) / self.max_epoch
-        loss *= loss_weight
-        return loss
-
-
-class PositiveGammaGate(nn.Module):
-    def __init__(self, max_epoch, gamma):
-        super(PositiveGammaGate, self).__init__()
-        self.max_epoch = max_epoch
-        self.gamma = gamma
-
-    def forward(self, loss, epoch):
-        loss_weight = epoch / self.max_epoch
-        loss_weight = loss_weight ** (1 / self.gamma)
-        loss *= loss_weight
-        return loss
-
-
-class NegativeGammaGate(nn.Module):
-    def __init__(self, max_epoch, gamma):
-        super(NegativeGammaGate, self).__init__()
-        self.max_epoch = max_epoch
-        self.gamma = gamma
-
-    def forward(self, loss, epoch):
-        loss_weight = (self.max_epoch - epoch) / self.max_epoch
-        loss_weight = loss_weight ** (1 / self.gamma)
-        loss *= loss_weight
-        return loss
+        # 1 -> 0 の線形スケジュール（最終epochで0になるように正規化）
+        if self.max_epoch <= 1:
+            loss_weight = float(epoch == 0)
+        else:
+            loss_weight = (self.max_epoch - 1 - epoch) / (self.max_epoch - 1)
+        # 数値誤差を考慮してクリップ
+        loss_weight = max(0.0, min(1.0, loss_weight))
+        return loss * loss_weight

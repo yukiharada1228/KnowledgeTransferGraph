@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from ktg import Edges, KnowledgeTransferGraph, Node
+from ktg import Edge, KnowledgeTransferGraph, Node
 from ktg.dataset.cifar_datasets.cifar100 import get_datasets
 from ktg.gates import ThroughGate
 from ktg.models import cifar_models
@@ -31,7 +31,7 @@ set_seed(manualSeed)
 batch_size = 64
 num_workers = 10
 
-train_dataset, val_dataset, _ = get_datasets()
+train_dataset, val_dataset = get_datasets()
 
 train_dataloader = DataLoader(
     train_dataset,
@@ -83,7 +83,7 @@ optimizer = getattr(torch.optim, optim_setting["name"])(
 scheduler = getattr(torch.optim.lr_scheduler, scheduler_setting["name"])(
     optimizer, **scheduler_setting["args"]
 )
-edges = Edges(criterions, gates)
+edges = [Edge(c, g) for c, g in zip(criterions, gates)]
 
 node = Node(
     model=model,
@@ -94,7 +94,7 @@ node = Node(
     scheduler=scheduler,
     edges=edges,
     loss_meter=AverageMeter(),
-    top1_meter=AverageMeter(),
+    score_meter=AverageMeter(),
 )
 nodes.append(node)
 

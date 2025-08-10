@@ -4,12 +4,24 @@ import math
 import torch
 import torch.nn as nn
 
-from ktg.losses import (BarlowTwinsLoss, BYOLLoss, DINOLoss, MoCoLoss,
-                        SimCLRLoss, SimSiamLoss, SwAVLoss)
-from ktg.models.projector import (BarlowTwinsProjector, BYOLProjector,
-                                  DINOProjector, MoCoProjector,
-                                  SimCLRProjector, SimSiamProjector,
-                                  SwAVProjector)
+from ktg.losses import (
+    BarlowTwinsLoss,
+    BYOLLoss,
+    DINOLoss,
+    MoCoLoss,
+    SimCLRLoss,
+    SimSiamLoss,
+    SwAVLoss,
+)
+from ktg.models.projector import (
+    BarlowTwinsProjector,
+    BYOLProjector,
+    DINOProjector,
+    MoCoProjector,
+    SimCLRProjector,
+    SimSiamProjector,
+    SwAVProjector,
+)
 
 
 class SimCLR(nn.Module):
