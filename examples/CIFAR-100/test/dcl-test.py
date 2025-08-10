@@ -63,7 +63,7 @@ def main():
     set_seed(args.seed)
 
     study_name = args.study_name or f"dcl_{args.num_nodes}"
-    optuna_dir = os.path.join("optuna", study_name)
+    optuna_dir = os.path.join("../optuna", study_name)
     storage = JournalStorage(JournalFileStorage(os.path.join(optuna_dir, "optuna.log")))
     study = optuna.create_study(
         storage=storage, study_name=study_name, load_if_exists=True
