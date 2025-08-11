@@ -1,6 +1,7 @@
 import os
 import time
 from dataclasses import dataclass, field
+from typing import Optional
 
 import optuna
 import torch
@@ -60,7 +61,6 @@ class Node:
     model: nn.Module
     writer: SummaryWriter
     scaler: torch.cuda.amp.GradScaler
-    save_dir: str
     optimizer: Optimizer
     edges: list[Edge]
     total_loss: TotalLoss = field(init=False)
@@ -69,6 +69,7 @@ class Node:
     scheduler: LRScheduler = None
     best_score: float = 0.0
     eval: nn.Module = accuracy
+    save_dir: Optional[str] = None
 
     def __post_init__(self):
         self.total_loss = TotalLoss(edges=self.edges)
@@ -86,7 +87,8 @@ class KnowledgeTransferGraph:
         print("Welcome to KTG!!!")
         self.nodes = nodes
         for node in nodes:
-            os.makedirs(node.save_dir, exist_ok=True)
+            if node.save_dir:
+                os.makedirs(node.save_dir, exist_ok=True)
         self.max_epoch = max_epoch
         self.train_dataloader = train_dataloader
         self.test_dataloader = test_dataloader
@@ -191,7 +193,8 @@ class KnowledgeTransferGraph:
                     "model_id: {0:}   score :test={1:.3f}".format(model_id, test_score)
                 )
                 if node.best_score <= node.score_meter.avg:
-                    save_checkpoint(node.model, node.save_dir, epoch, is_best=True)
+                    if node.save_dir:
+                        save_checkpoint(node.model, node.save_dir, epoch, is_best=True)
                     node.best_score = node.score_meter.avg
                 if model_id == 0 and self.trial is not None:
                     self.trial.report(test_score, step=epoch)

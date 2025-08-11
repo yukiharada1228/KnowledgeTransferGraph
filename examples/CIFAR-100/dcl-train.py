@@ -117,7 +117,6 @@ def objective(trial):
         writer = SummaryWriter(
             f"runs/dcl_{num_nodes}/{trial.number:04}/{i}_{model_name}"
         )
-        save_dir = f"checkpoint/dcl_{num_nodes}/{trial.number:04}/{i}_{model_name}"
         optimizer = getattr(torch.optim, optim_setting["name"])(
             model.parameters(), **optim_setting["args"]
         )
@@ -130,7 +129,6 @@ def objective(trial):
             model=model,
             writer=writer,
             scaler=torch.cuda.amp.GradScaler(),
-            save_dir=save_dir,
             optimizer=optimizer,
             scheduler=scheduler,
             edges=edges,
