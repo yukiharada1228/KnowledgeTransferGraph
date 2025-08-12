@@ -78,8 +78,8 @@ def main():
     # 自己教師あり学習損失のみを使用
     gates = [ThroughGate(max_epoch)]
 
-    writer = SummaryWriter(f"runs/pre-train/SimCLR/{model_name}")
-    save_dir = f"checkpoint/pre-train/SimCLR/{model_name}"
+    writer = SummaryWriter(f"runs/pre-train/{model_name}")
+    save_dir = f"checkpoint/pre-train/{model_name}"
 
     optimizer = LARS(
         ssl_model.parameters(),
