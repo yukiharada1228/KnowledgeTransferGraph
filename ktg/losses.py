@@ -23,15 +23,6 @@ class KLDivLoss(nn.Module):
         return loss
 
 
-class SSLLoss(nn.Module):
-    def __init__(self):
-        super(SSLLoss, self).__init__()
-
-    def forward(self, target_output, _):
-        loss = target_output[0]
-        return loss
-
-
 class SimCLRLoss(nn.Module):
     # 有志の方のPyTorch実装版のSimCLRのプログラムを参考に作成
     def __init__(self, batch_size, T=0.3):
@@ -93,6 +84,26 @@ class SimCLRLoss(nn.Module):
         loss = (
             self.criterion(logits, labels) / self.N
         )  # 損失計算（総和）+データ数で除算（平均）
+        return loss
+
+
+class SimilarityMatrixKLDivLoss(nn.Module):
+    def __init__(self, T=0.3, lam=1):
+        super(SimilarityMatrixKLDivLoss, self).__init__()
+        self.similarity_f = nn.CosineSimilarity(dim=2)
+        self.criterion = KLDivLoss(T=T)
+        self.lam = lam
+
+    def forward(self, target_output, source_output):
+        z1_m1 = target_output[0]
+        z2_m1 = target_output[1]
+        z1_m2 = source_output[0]
+        z2_m2 = source_output[1]
+
+        sim_m1 = self.similarity_f(z1_m1.unsqueeze(1), z2_m1.unsqueeze(0))
+        sim_m2 = self.similarity_f(z1_m2.unsqueeze(1), z2_m2.unsqueeze(0))
+
+        loss = self.lam * self.criterion(sim_m1, sim_m2)
         return loss
 
 
@@ -353,41 +364,4 @@ class MSELoss(nn.Module):
         fvec_m2 = torch.cat((z1_m2, z2_m2), dim=0)
 
         loss = self.criterion(fvec_m1, fvec_m2.detach())
-        return loss
-
-
-class KLLoss(nn.Module):
-    def __init__(self, T=1, lam=1):
-        super(KLLoss, self).__init__()
-        self.similarity_f = nn.CosineSimilarity(dim=2)
-        self.criterion = KLDivLoss(T=T)
-        self.lam = lam
-
-    def forward(self, target_output, source_output):
-        z1_m1 = target_output[1]
-        z2_m1 = target_output[2]
-        z1_m2 = source_output[1]
-        z2_m2 = source_output[2]
-
-        sim_m1 = self.similarity_f(z1_m1.unsqueeze(1), z2_m1.unsqueeze(0))
-        sim_m2 = self.similarity_f(z1_m2.unsqueeze(1), z2_m2.unsqueeze(0))
-
-        loss = self.lam * self.criterion(sim_m1, sim_m2)
-        return loss
-
-
-class MSEKLLoss(nn.Module):
-    def __init__(self, mse_weight=1.0, kl_weight=1.0, kl_temperature=1.0):
-        super(MSEKLLoss, self).__init__()
-        self.mse_loss = MSELoss()
-        self.kl_loss = KLLoss(T=kl_temperature)
-
-        self.mse_weight = mse_weight
-        self.kl_weight = kl_weight
-
-    def forward(self, target_output, source_output):
-        mse_loss = self.mse_loss(target_output, source_output)
-        kl_loss = self.kl_loss(target_output, source_output)
-
-        loss = self.mse_weight * mse_loss + self.kl_weight * kl_loss
         return loss
