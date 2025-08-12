@@ -22,11 +22,9 @@ from ktg.utils import (
     LARS,
     get_cosine_schedule_with_warmup,
     KNNValidation,
+    load_checkpoint,
 )
 from torchvision import transforms
-
-
-## ラッパー不要: SimilarityMatrixKLDivLoss 側で [z1,z2] / [loss,z1,z2] の双方に対応
 
 
 def main():
@@ -98,8 +96,23 @@ def main():
 
         nodes = []
         for i in range(num_nodes):
-            # モデル定義（SimCLR）
-            model_name = models_name[i] if i < len(models_name) else models_name[-1]
+            # 1) 各ノードに対する criterion と gate を先に構築
+            criterions = []
+            gates_list = []
+            for j in range(num_nodes):
+                if i == j:
+                    criterions.append(SimCLRLoss(args.batch_size))
+                else:
+                    criterions.append(SimilarityMatrixKLDivLoss())
+                gate_name = trial.suggest_categorical(f"{i}_{j}_gate", gates_name)
+                gate = getattr(gates, gate_name)(args.max_epoch)
+                gates_list.append(gate)
+
+            # 2) モデル選択と構築
+            if i == 0:
+                model_name = models_name[0]
+            else:
+                model_name = trial.suggest_categorical(f"{i}_model", models_name)
 
             def encoder_func(_mn=model_name):
                 model = getattr(cifar_models, _mn)(num_classes)
@@ -107,7 +120,26 @@ def main():
 
             ssl_model = SimCLR(encoder_func).cuda()
 
-            # Optimizer/Scheduler（SimCLR 推奨設定に合わせて LARS + Cosine）
+            # 3) すべて CutoffGate かつ i!=0 の場合、SimCLR の事前学習重みをロード
+            if (
+                all(gate.__class__.__name__ == "CutoffGate" for gate in gates_list)
+                and i != 0
+            ):
+                load_checkpoint(
+                    model=ssl_model,
+                    save_dir=f"checkpoint/pre-train/{model_name}",
+                    is_best=True,
+                )
+
+            # 4) ログ/保存先
+            writer = SummaryWriter(
+                f"runs/dcl_{args.num_nodes}/{trial.number:04}/{i}_{model_name}"
+            )
+            save_dir = (
+                f"checkpoint/dcl_{args.num_nodes}/{trial.number:04}/{i}_{model_name}"
+            )
+
+            # 5) Optimizer/Scheduler（SimCLR 推奨設定に合わせて LARS + Warmup Cosine）
             optimizer = LARS(
                 ssl_model.parameters(),
                 lr=args.lr,
@@ -123,35 +155,27 @@ def main():
                 num_training_steps=args.max_epoch,
                 num_cycles=0.5,
             )
-            edges_list = []
-            for j in range(num_nodes):
-                if i == j:
-                    criterion = SimCLRLoss(args.batch_size)
-                else:
-                    criterion = SimilarityMatrixKLDivLoss()
-                gate_name = trial.suggest_categorical(f"{i}_{j}_gate", gates_name)
-                gate = getattr(gates, gate_name)(args.max_epoch)
-                edges_list.append(Edge(criterion, gate))
 
-            writer = SummaryWriter(
-                f"runs/dcl_{args.num_nodes}/{trial.number:04}/{i}_{model_name}"
-            )
-            save_dir = (
-                f"checkpoint/dcl_{args.num_nodes}/{trial.number:04}/{i}_{model_name}"
-            )
+            # 6) Edges 作成
+            edges_list = [Edge(c, g) for c, g in zip(criterions, gates_list)]
 
-            # pre-train.py と同様の KNN 評価関数をローカルに定義
             def knn_eval_fn():
-                le_train_ds, le_test_ds = get_datasets(use_test_mode=True)
+                # get_datasets を使い、Normalize なしの前処理に差し替え
+                le_train_ds, le_val_ds = get_datasets()
+
                 transform = transforms.Compose([transforms.ToTensor()])
+
+                # transform を上書き
                 le_train_ds.transform = transform
-                le_test_ds.transform = transform
+                le_val_ds.transform = transform
+
                 evaluator = KNNValidation(
                     model=ssl_model,
                     train_dataset=le_train_ds,
-                    test_dataset=le_test_ds,
+                    test_dataset=le_val_ds,
                     K=20,
                 )
+                # tensor -> float
                 return float(evaluator().item())
 
             node = Node(
