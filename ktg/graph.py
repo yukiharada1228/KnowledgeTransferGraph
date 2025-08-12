@@ -168,6 +168,9 @@ class KnowledgeTransferGraph:
             for model_id, node in enumerate(self.nodes):
                 train_lr = node.optimizer.param_groups[0]["lr"]
                 train_loss = node.loss_meter.avg
+                # SSL 等で score_meter が未更新の場合は eval() にフォールバック（テスト側と同様の挙動に揃える）
+                if node.score_meter.avg == 0.0:
+                    node.score_meter.avg = node.eval()
                 train_score = node.score_meter.avg
                 node.writer.add_scalar("train_lr", train_lr, epoch)
                 node.writer.add_scalar("train_loss", train_loss, epoch)

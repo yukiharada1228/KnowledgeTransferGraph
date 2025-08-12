@@ -60,7 +60,10 @@ class SimCLRLoss(nn.Module):
             )
         return mask
 
-    def forward(self, z1, z2, _p1, _p2):
+    def forward(self, target_output, _):
+        # Edgeの自エッジ経由 (target_output=[z1, z2], label)
+        z1, z2 = target_output[0], target_output[1]
+
         # 全てのサンプル間の類似度の計算
         z = torch.cat((z1, z2), dim=0)  # ネットワークの２つの出力を1つのTensorに
         z = nn.functional.normalize(z, dim=1)  # 正規化

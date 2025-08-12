@@ -18,36 +18,44 @@ class Solarization(object):
 
 
 class SimCLRTransforms(object):
-    # 論文 A. Data Augmentation Details の記載より設定
-    #   The crop of random size (uniform from 0.08 to 1.0 in area) of the original size
-    #     and a random aspect ratio (default: of 3/4 to 4/3) of the original aspect ratio is made.
-    #   This crop is finally resized to the original size.
-    #   Additionally, the random crop (with resize) is always followed by a random horizontal/left-to-right flip with 50% probability. This is helpful but not essential.
-    #   Color distortion is composed by color jittering and color dropping.
-    #   We blur the image 50% of the time using a Gaussian kernel. We randomly sample σ ∈ [0.1, 2.0], and the kernel size is set to be 10% of the image height/width.
-    #   ColorJitter 0.8*s, 0.8*s, 0.8*s, 0.2*s (color_jitter_strength : s=0.5, https://github.com/google-research/simclr)
-    def __init__(self, input_size=32):
-        self.train_transform = transforms.Compose(
-            [
-                transforms.RandomResizedCrop(
-                    input_size
-                ),  # Default: scale=(0.08, 1.0), ratio=(0.75, 1.3333333333333333)
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.RandomApply(
-                    [
-                        transforms.ColorJitter(
-                            brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1
-                        )
-                    ],
-                    p=0.8,
-                ),
-                transforms.RandomGrayscale(p=0.2),
-                transforms.ToTensor(),
-            ]
+    # Appendix A (SimCLR) 準拠の拡張をそのまま適用
+    # - RandomResizedCrop: scale=(0.08, 1.0), ratio=(3/4, 4/3)
+    # - RandomHorizontalFlip: p=0.5
+    # - ColorJitter(0.8*s, 0.8*s, 0.8*s, 0.2*s) を p=0.8
+    # - RandomGrayscale: p=0.2
+    # - GaussianBlur: p=0.5, sigma=[0.1, 2.0], kernel_size=高さ/幅の10%（奇数, 最小3）
+    # - ToTensor
+    def __init__(self, input_size=32, s: float = 0.5, include_blur: bool = False):
+        kernel_size = max(3, int(round(0.1 * input_size)))
+        if kernel_size % 2 == 0:
+            kernel_size += 1
+
+        color_jitter = transforms.ColorJitter(
+            brightness=0.8 * s, contrast=0.8 * s, saturation=0.8 * s, hue=0.2 * s
         )
 
+        simclr_ops = [
+            transforms.RandomResizedCrop(input_size),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomApply([color_jitter], p=0.8),
+            transforms.RandomGrayscale(p=0.2),
+        ]
+        if include_blur:
+            simclr_ops.append(
+                transforms.RandomApply(
+                    [
+                        transforms.GaussianBlur(
+                            kernel_size=kernel_size, sigma=(0.1, 2.0)
+                        )
+                    ],
+                    p=0.5,
+                )
+            )
+        simclr_ops.append(transforms.ToTensor())
+
+        self.train_transform = transforms.Compose(simclr_ops)
+
     def __call__(self, x):
-        # 1つの画像に対して２つのデータ増幅を適用した画像を取得
         q = self.train_transform(x)
         k = self.train_transform(x)
         return [q, k]

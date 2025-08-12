@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from sklearn.neighbors import KNeighborsClassifier
 from torch.utils.data import DataLoader
+from .seed import WorkerInitializer
 
 
 def accuracy(
@@ -23,7 +24,7 @@ def accuracy(
 
 
 class KNNValidation(nn.Module):
-    def __init__(self, model, train_dataset, test_dataset, K=1):
+    def __init__(self, model, train_dataset, test_dataset, K=20):
         super(KNNValidation, self).__init__()
         self.model = model
         self.K = K

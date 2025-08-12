@@ -25,10 +25,12 @@ from ktg.models.projector import (
 
 
 class SimCLR(nn.Module):
-    def __init__(self, encoder_func, batch_size, projector_func=SimCLRProjector):
+    def __init__(
+        self,
+        encoder_func,
+        out_dim=128,
+    ):
         super(SimCLR, self).__init__()
-        # 自己教師あり学習の損失
-        self.criterion = SimCLRLoss(batch_size)
 
         # ネットワークの用意
         self.encoder = encoder_func()
@@ -36,7 +38,11 @@ class SimCLR(nn.Module):
         self.encoder.fc = nn.Identity()
 
         # projector(MLP)の用意
-        self.projector = projector_func(input_dim=self.input_dim)
+        self.projector = nn.Sequential(
+            nn.Linear(self.input_dim, self.input_dim, bias=True),
+            nn.ReLU(),
+            nn.Linear(self.input_dim, out_dim, bias=False),
+        )
 
     @torch.no_grad()
     def encoder_features(self, x):
@@ -53,8 +59,7 @@ class SimCLR(nn.Module):
         z1 = self.projector(h1)
         z2 = self.projector(h2)
 
-        loss = self.criterion(z1, z2, None, None)
-        return [loss, z1, z2]
+        return [z1, z2]
 
 
 class MoCo(nn.Module):
