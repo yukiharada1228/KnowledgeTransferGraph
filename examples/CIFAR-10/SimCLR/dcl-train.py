@@ -37,7 +37,6 @@ def main():
         nargs="*",
         type=str,
         default=["resnet32", "resnet110", "wideresnet28_2"],
-        help="使用する CIFAR モデル名の候補。ノード数ぶん順に割り当て（不足時は最後を繰り返し）。",
     )
     parser.add_argument(
         "--gates",
