@@ -29,7 +29,7 @@ def main():
     parser.add_argument("--seed", default=42)
     parser.add_argument("--lr", default=1.0)
     parser.add_argument("--wd", default=1e-6)
-    parser.add_argument("--model", default="resnet50")
+    parser.add_argument("--model", default="resnet32")
     args = parser.parse_args()
 
     manualSeed = int(args.seed)
