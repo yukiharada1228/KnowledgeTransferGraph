@@ -347,21 +347,3 @@ class DINOLoss(nn.Module):
         t_loss /= n_loss_terms
         self.update_center(teacher_output)
         return t_loss
-
-
-class MSELoss(nn.Module):
-    def __init__(self):
-        super(MSELoss, self).__init__()
-        self.criterion = nn.MSELoss()
-
-    def forward(self, target_output, source_output):
-        z1_m1 = target_output[1]
-        z2_m1 = target_output[2]
-        z1_m2 = source_output[1]
-        z2_m2 = source_output[2]
-
-        fvec_m1 = torch.cat((z1_m1, z2_m1), dim=0)
-        fvec_m2 = torch.cat((z1_m2, z2_m2), dim=0)
-
-        loss = self.criterion(fvec_m1, fvec_m2.detach())
-        return loss
