@@ -88,6 +88,8 @@ class SimCLRLoss(nn.Module):
 
 
 class SimilarityMatrixKLDivLoss(nn.Module):
+    # https://github.com/NeurAI-Lab/DoGo/blob/main/criterion/kl.pyを参考に作成
+    # 類似度行列のKLダイバージェンスを計算する損失関数
     def __init__(self, T=0.3, lam=1):
         super(SimilarityMatrixKLDivLoss, self).__init__()
         self.similarity_f = nn.CosineSimilarity(dim=2)
