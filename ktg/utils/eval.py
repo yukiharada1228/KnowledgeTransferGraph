@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.cluster import DBSCAN
+from sklearn.metrics import silhouette_score
 from torch.utils.data import DataLoader
-from .seed import WorkerInitializer
+import numpy as np
 
 
 def accuracy(
@@ -85,6 +87,76 @@ class KNNValidation(nn.Module):
             sum(pred_test == test_labels.numpy()) / len(pred_test) * 100
         )
         return knn_acc
+
+
+class SilhouetteValidation(nn.Module):
+    def __init__(
+        self,
+        model,
+        train_dataset,
+        test_dataset,
+        eps: float = 0.5,
+        min_samples: int = 5,
+        metric: str = "euclidean",
+    ):
+        super(SilhouetteValidation, self).__init__()
+        self.model = model
+        self.eps = eps
+        self.min_samples = min_samples
+        self.metric = metric
+        self.train_dataset = train_dataset  # 互換性維持のため保持（未使用）
+        self.test_dataset = test_dataset
+        self.test_dataloader = DataLoader(
+            test_dataset,
+            batch_size=512,
+            shuffle=False,
+            num_workers=10,
+            pin_memory=True,
+            drop_last=False,
+        )
+
+    def forward(self) -> torch.Tensor:
+        # 評価はテスト埋め込みに対してDBSCANを適用し、そのクラスタでシルエット係数を算出
+        test_coords = self.extract_features(self.test_dataloader)
+        if test_coords is None:
+            return torch.tensor(0.0)
+
+        X = test_coords.numpy()
+
+        clustering = DBSCAN(
+            eps=self.eps, min_samples=self.min_samples, metric=self.metric
+        )
+        labels = clustering.fit_predict(X)
+
+        # ノイズ(-1)を除外して評価（少なくとも2クラスタ必要）
+        mask = labels != -1
+        if mask.sum() < 2:
+            return torch.tensor(0.0)
+        labels_f = labels[mask]
+        if len(set(labels_f.tolist())) < 2:
+            return torch.tensor(0.0)
+        score = silhouette_score(X[mask], labels_f, metric=self.metric)
+        return torch.tensor(float(score))
+
+    def extract_features(self, dataloader):
+        self.model.eval()
+
+        coords = None
+        cnt = 0
+
+        for inputs, _ in dataloader:
+            inputs = inputs.cuda()
+            batch_size = inputs.size(0)
+
+            with torch.no_grad():
+                features = self.model.encoder_features(inputs)
+
+            if coords == None:
+                coords = torch.zeros((len(dataloader.dataset), features.shape[1]))
+
+            coords[cnt : cnt + batch_size] = features.data.cpu()
+            cnt += batch_size
+        return coords
 
 
 class AverageMeter:
