@@ -134,9 +134,6 @@ def main():
             writer = SummaryWriter(
                 f"runs/dcl_{args.num_nodes}/{trial.number:04}/{i}_{model_name}"
             )
-            save_dir = (
-                f"checkpoint/dcl_{args.num_nodes}/{trial.number:04}/{i}_{model_name}"
-            )
 
             # 5) Optimizer/Scheduler（SimCLR 推奨設定に合わせて LARS + Warmup Cosine）
             optimizer = LARS(
@@ -187,7 +184,6 @@ def main():
                 loss_meter=AverageMeter(),
                 score_meter=AverageMeter(),
                 eval=knn_eval_fn,
-                save_dir=save_dir,
             )
             nodes.append(node)
 
