@@ -109,6 +109,10 @@ class SimilarityMatrixKLDivLoss(nn.Module):
         return loss
 
 
+# ここから下は仮実装です。
+# 実装が完了したら、このコメントを削除してください。
+# ここから上は実装が完了したものです。
+
 class MoCoLoss(nn.Module):
     # https://github.com/facebookresearch/moco/blob/main/moco/builder.py#L154
     def __init__(self, projector, K=4096, T=0.2):
