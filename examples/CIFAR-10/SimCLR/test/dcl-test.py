@@ -193,17 +193,17 @@ def main():
 
         def knn_eval_fn():
             # get_datasets を使い、Normalize なしの前処理に差し替え
-            le_train_ds, le_val_ds = get_datasets()
+            le_train_ds, le_test_ds = get_datasets(use_test_mode=True)
 
             transform = transforms.Compose([transforms.ToTensor()])
 
             le_train_ds.transform = transform
-            le_val_ds.transform = transform
+            le_test_ds.transform = transform
 
             evaluator = KNNValidation(
                 model=ssl_model,
                 train_dataset=le_train_ds,
-                test_dataset=le_val_ds,
+                test_dataset=le_test_ds,
                 K=20,
             )
             return float(evaluator().item())

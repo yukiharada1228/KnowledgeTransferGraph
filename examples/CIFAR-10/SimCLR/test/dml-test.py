@@ -167,10 +167,10 @@ def main():
             load_checkpoint(model=ssl_model, save_dir=pretrain_dir, is_best=True)
 
         writer = SummaryWriter(
-            f"runs/dcl_{args.num_nodes}/{best_trial.number:04}/{i}_{model_name}"
+            f"runs/dml_{args.num_nodes}/{best_trial.number:04}/{i}_{model_name}"
         )
         save_dir = (
-            f"checkpoint/dcl_{args.num_nodes}/{best_trial.number:04}/{i}_{model_name}"
+            f"checkpoint/dml_{args.num_nodes}/{best_trial.number:04}/{i}_{model_name}"
         )
 
         # Optimizer/Scheduler（LARS + Warmup Cosine）
@@ -194,17 +194,17 @@ def main():
 
         def knn_eval_fn():
             # get_datasets を使い、Normalize なしの前処理に差し替え
-            le_train_ds, le_val_ds = get_datasets()
+            le_train_ds, le_test_ds = get_datasets(use_test_mode=True)
 
             transform = transforms.Compose([transforms.ToTensor()])
 
             le_train_ds.transform = transform
-            le_val_ds.transform = transform
+            le_test_ds.transform = transform
 
             evaluator = KNNValidation(
                 model=ssl_model,
                 train_dataset=le_train_ds,
-                test_dataset=le_val_ds,
+                test_dataset=le_test_ds,
                 K=20,
             )
             return float(evaluator().item())
