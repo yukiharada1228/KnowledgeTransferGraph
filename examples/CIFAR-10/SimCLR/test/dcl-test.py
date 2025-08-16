@@ -195,7 +195,10 @@ def main():
             # get_datasets を使い、Normalize なしの前処理に差し替え
             le_train_ds, le_test_ds = get_datasets(use_test_mode=True)
 
-            transform = transforms.Compose([transforms.ToTensor()])
+            # Tensor 入力が来てもそのまま、PIL/ndarray の場合は ToTensor を適用
+            transform = transforms.Lambda(
+                lambda x: x if isinstance(x, torch.Tensor) else transforms.ToTensor()(x)
+            )
 
             le_train_ds.transform = transform
             le_test_ds.transform = transform
