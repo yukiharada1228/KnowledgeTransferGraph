@@ -107,6 +107,9 @@ def main():
 
     # データセット: SimCLR 用に 2-view を生成。use_test_mode=True で train(=train+val) / test を得る
     base_train_ds, base_test_ds = get_datasets(use_test_mode=True)
+    # test 側は ToTensor+Normalize が元から入っているため、SimCLRTransforms を当てる前に解除
+    if hasattr(base_test_ds, "transform"):
+        base_test_ds.transform = None
     ssl_transform = SimCLRTransforms()
     train_dataset = CustomDataset(base_train_ds.subset, transform=ssl_transform)
     test_dataset = CustomDataset(base_test_ds, transform=ssl_transform)
