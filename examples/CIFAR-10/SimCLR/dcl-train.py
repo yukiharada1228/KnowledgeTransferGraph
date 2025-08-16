@@ -155,7 +155,7 @@ def main():
             # 6) Edges 作成
             edges_list = [Edge(c, g) for c, g in zip(criterions, gates_list)]
 
-            def knn_eval_fn():
+            def knn_eval_fn(_model=ssl_model):
                 # get_datasets を使い、Normalize なしの前処理に差し替え
                 le_train_ds, le_val_ds = get_datasets()
 
@@ -166,7 +166,7 @@ def main():
                 le_val_ds.transform = transform
 
                 evaluator = KNNValidation(
-                    model=ssl_model,
+                    model=_model,
                     train_dataset=le_train_ds,
                     test_dataset=le_val_ds,
                     K=20,

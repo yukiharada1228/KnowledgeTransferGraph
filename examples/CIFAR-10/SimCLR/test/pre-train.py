@@ -99,7 +99,7 @@ def main():
 
     edges = [Edge(SimCLRLoss(batch_size), ThroughGate(max_epoch))]
 
-    def knn_eval_fn():
+    def knn_eval_fn(_model=ssl_model):
         # get_datasets を使い、Normalize なしの前処理に差し替え
         le_train_ds, le_test_ds = get_datasets(use_test_mode=True)
 
@@ -110,7 +110,7 @@ def main():
         le_test_ds.transform = transform
 
         evaluator = KNNValidation(
-            model=ssl_model,
+            model=_model,
             train_dataset=le_train_ds,
             test_dataset=le_test_ds,
             K=20,
