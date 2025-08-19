@@ -2,13 +2,17 @@
 
 このディレクトリは CIFAR-10 を用いた KTG（Knowledge Transfer Graph）上での SimCLR 実験一式です。単体の自己教師あり事前学習は `pre-train.py`、共同学習（DCL）の探索は `dcl-train.py` を使用します。
 
+### ハイライト（TL;DR） — KNN@20 指標（`runs` 由来）
+- **pre-train（train→val）/ resnet32**: 73.60%
+- **DCL（val）/ resnet32（node0, best）**: 74.16%（Trial 0000, Epoch 359）
+
 ### 目次
 - データセットと前処理（SimCLR）
 - 学習設定（共通）
 - 利用可能モデル
-- 探索（DCL）メモ
-- KNN 検証結果
-- 実行手順（Quick Start）
+- DCL 探索サマリと設定
+- 単体モデル（train→val, pre-train）
+- Quick Start
 - 補足
 
 ---
@@ -36,38 +40,33 @@
 ### 利用可能モデル
 - `resnet32`, `resnet110`, `wideresnet28_2`
 
-### 探索（DCL）メモ
-- スタディ名: `dcl_3`（ノード数=3 をデフォルト想定）
+### DCL 探索サマリと設定
+- スタディ: `dcl_3`（ノード数 = 3）
 - ログ: `examples/CIFAR-10/SimCLR/optuna/dcl_3/optuna.log`
 - ゲート候補（探索空間）: `ThroughGate`, `CutoffGate`, `PositiveLinearGate`, `NegativeLinearGate`
+- トライアル数: 51（0000〜0050）
+- ベストトライアル: 0000（node0 resnet32 KNN@20 = 74.16%, Epoch 359 on val）
+- Trial 出力: `examples/CIFAR-10/SimCLR/runs/dcl_3/0000/`
 - すべてのエッジが `CutoffGate` かつ `i!=0` のノードでは、対応モデルの SimCLR 事前学習重みを自動ロード（`checkpoint/pre-train/{model}`）。
 
-#### 探索（DCL）スコア例（train→val, KNN@20）
-| Trial | ノード | モデル | ベストKNN@20(%) | ベストEpoch |
-|---:|---:|---|---:|---:|
-| 0 | 0 | resnet32 | 45.76 | 6 |
-| 0 | 1 | resnet110 | 46.18 | 6 |
-| 0 | 2 | resnet110 | 46.22 | 6 |
+#### ノード0（resnet32）スコア（train→val, KNN@20）
+| トライアル | ベストKNN@20(%) | ベストEpoch |
+|---:|---:|---:|
+| 0000 | 74.16 | 359 |
 
-### KNN 検証結果
+### 単体モデル結果（pre-train.py, train→val）
+- ログ: `examples/CIFAR-10/SimCLR/runs/pre-train/`
+- チェックポイント: `examples/CIFAR-10/SimCLR/checkpoint/pre-train/{model}/`
 
-#### 単体モデル（pre-train, train→val）
 | モデル | ベストKNN@20(%) | ベストEpoch |
 |---|---:|---:|
 | resnet32 | 73.60 | 363 |
-| resnet110 | 79.35 | 370 |
+| resnet110 | 79.03 | 282 |
 | wideresnet28_2 | 79.36 | 334 |
 
-#### テスト運用（train+val → test, `test/pre-train.py`）
-| モデル | ベストKNN@20(%) | ベストEpoch |
-|---|---:|---:|
-| resnet32 | 73.74 | 369 |
+> 備考: スコアは TensorBoard の `train_score` / `test_score` に記録。
 
-備考:
-- スコアは TensorBoard の `train_score` / `test_score` に記録されています（上記ログディレクトリを参照）。
-- DCL 探索中の各ノードのスコアは `runs/dcl_3/{trial}/{i}_{model}/` に出力されます。
-
-### 実行手順（Quick Start）
+### Quick Start
 1) 事前学習（任意: 各モデルで実行可）
 ```bash
 cd examples/CIFAR-10/SimCLR
@@ -76,7 +75,7 @@ python pre-train.py --model resnet110
 python pre-train.py --model wideresnet28_2
 ```
 
-2) Optuna による探索（DCL, SimCLR 連携）
+2) Optuna による探索（DCL × SimCLR）
 ```bash
 cd examples/CIFAR-10/SimCLR
 python dcl-train.py --num-nodes 3 --n_trials 100 \
@@ -93,6 +92,6 @@ python pre-train.py --model resnet32
 - `runs/` は TensorBoard のログ出力先です。
 - `checkpoint/` にはベストモデルが保存されます（`pre-train` ほか）。
 - SimCLR は自己教師あり学習のため、スクリプト内では `SimCLRLoss` を使用し、KNN で表現品質を定期評価します。
+- DCL 探索中の各ノードのスコアは `runs/dcl_3/{trial}/{i}_{model}/` に出力されます。
 - データはスクリプト実行時に `torchvision` から自動ダウンロードされます（既存の `data/` があればそれを使用）。
-
 
