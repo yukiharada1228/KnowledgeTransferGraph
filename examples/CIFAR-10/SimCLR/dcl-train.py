@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from optuna.storages import JournalFileStorage, JournalStorage
 
 from ktg import Edge, KnowledgeTransferGraph, Node, gates
-from ktg.losses import SimCLRLoss, TwoViewFeatureMSELoss
+from ktg.losses import SimCLRLoss, SimilarityMatrixKLDivLoss
 from ktg.models.ssl_models import SimCLR
 from ktg.models import cifar_models
 from ktg.transforms.ssl_transforms import SimCLRTransforms
@@ -102,7 +102,7 @@ def main():
                 if i == j:
                     criterions.append(SimCLRLoss(args.batch_size))
                 else:
-                    criterions.append(TwoViewFeatureMSELoss())
+                    criterions.append(SimilarityMatrixKLDivLoss())
                 gate_name = trial.suggest_categorical(f"{i}_{j}_gate", gates_name)
                 gate = getattr(gates, gate_name)(args.max_epoch)
                 gates_list.append(gate)

@@ -66,6 +66,16 @@
 
 > 備考: スコアは TensorBoard の `train_score` / `test_score` に記録。
 
+### 単体モデル結果（test/pre-train.py, train+val→test）
+- ログ: `examples/CIFAR-10/SimCLR/test/runs/pre-train/`
+- チェックポイント: `examples/CIFAR-10/SimCLR/test/checkpoint/pre-train/{model}/`
+
+| モデル | ベストKNN@20(%) | ベストEpoch |
+|---|---:|---:|
+| resnet32 | 73.74 | 369 |
+| resnet110 | 79.13 | 358 |
+| wideresnet28_2 | 79.39 | 374 |
+
 ### Quick Start
 1) 事前学習（任意: 各モデルで実行可）
 ```bash
