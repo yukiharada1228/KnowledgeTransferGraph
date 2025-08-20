@@ -109,6 +109,24 @@ class SimilarityMatrixKLDivLoss(nn.Module):
         return loss
 
 
+class TwoViewFeatureMSELoss(nn.Module):
+    def __init__(self):
+        super(TwoViewFeatureMSELoss, self).__init__()
+        self.criterion = nn.MSELoss()
+
+    def forward(self, target_output, source_output):
+        z1_m1 = target_output[0]
+        z2_m1 = target_output[1]
+        z1_m2 = source_output[0]
+        z2_m2 = source_output[1]
+
+        fvec_m1 = torch.cat((z1_m1, z2_m1), dim=0)
+        fvec_m2 = torch.cat((z1_m2, z2_m2), dim=0)
+
+        loss = self.criterion(fvec_m1, fvec_m2.detach())
+        return loss
+
+
 # ここから下は仮実装です。
 # 実装が完了したら、このコメントを削除してください。
 # ここから上は実装が完了したものです。
