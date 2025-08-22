@@ -3,9 +3,9 @@
 This directory contains the complete set of experiments for KTG (Knowledge Transfer Graph) on CIFAR-10 with SimCLR. Use `dcl-train.py` for the search, `test/dcl-test.py` and `test/dml-test.py` for retraining and evaluation, and `pre-train.py` for pre-training single models.
 
 ### Highlights (TL;DR) — Focus on Node0 `resnet32`
-- **pre-train (val)**: 73.60%
-- **DCL (val)**: 74.16% (node0, Trial 0000)
-- **DCL (test)**: 74.28% (node0), +0.68pt vs pre-train
+- **pre-train (test)**: 73.74%
+- **DML (test)**: 74.02% (+0.28pt vs pre-train)
+- **DCL (test)**: 74.28% (+0.54pt vs pre-train)
 
 ### Table of Contents
 - Dataset and preprocessing (SimCLR)
