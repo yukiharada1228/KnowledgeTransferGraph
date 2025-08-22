@@ -1,83 +1,120 @@
-## CIFAR-10 SimCLR 実験ノート（KTG）
+## CIFAR-10 Experiment Notes (KTG)
 
-このディレクトリは CIFAR-10 を用いた KTG（Knowledge Transfer Graph）上での SimCLR 実験一式です。単体の自己教師あり事前学習は `pre-train.py`、共同学習（DCL）の探索は `dcl-train.py` を使用します。
+This directory contains the complete set of experiments for KTG (Knowledge Transfer Graph) on CIFAR-10 with SimCLR. Use `dcl-train.py` for the search, `test/dcl-test.py` and `test/dml-test.py` for retraining and evaluation, and `pre-train.py` for pre-training single models.
 
-### ハイライト（TL;DR） — KNN@20 指標（`runs` 由来）
-- **pre-train（train→val）/ resnet32**: 73.60%
-- **DCL（val）/ resnet32（node0, best）**: 74.16%（Trial 0000, Epoch 359）
+### Highlights (TL;DR) — Focus on Node0 `resnet32`
+- **pre-train (val)**: 73.60%
+- **DCL (val)**: 74.16% (node0, Trial 0000)
+- **DCL (test)**: 74.28% (node0), +0.68pt vs pre-train
 
-### 目次
-- データセットと前処理（SimCLR）
-- 学習設定（共通）
-- 利用可能モデル
-- DCL 探索サマリと設定
-- 単体モデル（train→val, pre-train）
+### Table of Contents
+- Dataset and preprocessing (SimCLR)
+- Common training settings
+- Available models
+- DCL search summary and configuration
+- Retraining + test results (DCL / DML)
+- Single model test (pre-train)
 - Quick Start
-- 補足
+- Notes
 
 ---
 
-### データセットと前処理（SimCLR）
-- 分割: `train=40,000 / val=10,000` の固定分割（`ktg.dataset.cifar_datasets.cifar10.get_datasets`）。
-- テスト運用: `use_test_mode=True` で `train+val` を学習、`test` を評価に使用。SimCLR 学習時は正規化統計は使用せず、SSL 用の変換（`SimCLRTransforms`）のみを適用します。
-- SimCLR 前処理（`ktg.transforms.ssl_transforms.SimCLRTransforms`）:
+### Dataset and preprocessing (SimCLR)
+- **Split**: fixed `train=40,000 / val=10,000`
+- **Test operation**: with `use_test_mode=True`, train on `train+val` and evaluate on `test`. For SimCLR training, we do not use normalization statistics; only SSL transforms are applied.
+- **SimCLRTransforms**:
   - RandomResizedCrop(32)
   - RandomHorizontalFlip(p=0.5)
-  - ColorJitter を p=0.8 で適用
+  - ColorJitter with p=0.8
   - RandomGrayscale(p=0.2)
   - ToTensor
-  - 各サンプルから 2 view を生成し、`[q, k]` を返します。
-- KNN 検証時は Normalize を行わない単純な `ToTensor()` を使用（スクリプト内で上書き）。
+  - Generate two views per sample and return `[q, k]`.
+- For KNN validation, use simple `ToTensor()` without Normalize (overridden in scripts).
 
-### 学習設定（共通）
-- バッチサイズ: 512
-- エポック数: 400（Warmup 10 epoch + CosineAnnealing）
-- 最適化: LARS（lr=1.0, weight_decay=1e-6, momentum=0.9, eta=0.001）
-- スケジューラ: `get_cosine_schedule_with_warmup`
-- クラス数: 10（エンコーダの最終層サイズに使用）
-- 評価指標: KNN（K=20）による表現品質評価（train→val もしくは train+val→test）
+### Common training settings
+- Batch size: 512
+- Epochs: 400 (Warmup 10 epochs + CosineAnnealing)
+- Optimizer: LARS (lr=1.0, weight_decay=1e-6, momentum=0.9, eta=0.001)
+- Scheduler: `get_cosine_schedule_with_warmup`
+- Num classes: 10 (used for the encoder's final layer size)
+- Metric: KNN (K=20) for representation quality (train→val or train+val→test)
 
-### 利用可能モデル
+### Available models
 - `resnet32`, `resnet110`, `wideresnet28_2`
 
-### DCL 探索サマリと設定
-- スタディ: `dcl_3`（ノード数 = 3）
-- ログ: `examples/CIFAR-10/SimCLR/optuna/dcl_3/optuna.log`
-- ゲート候補（探索空間）: `ThroughGate`, `CutoffGate`, `PositiveLinearGate`, `NegativeLinearGate`
-- トライアル数: 51（0000〜0050）
-- ベストトライアル: 0000（node0 resnet32 KNN@20 = 74.16%, Epoch 359 on val）
-- Trial 出力: `examples/CIFAR-10/SimCLR/runs/dcl_3/0000/`
-- すべてのエッジが `CutoffGate` かつ `i!=0` のノードでは、対応モデルの SimCLR 事前学習重みを自動ロード（`checkpoint/pre-train/{model}`）。
+### DCL search summary
+- Study: `dcl_3` (number of nodes = 3)
+- Log: `examples/CIFAR-10/SimCLR/optuna/dcl_3/optuna.log`
+- Best trial: **Trial 0000**
+- Best score: **KNN@20 74.16%** (estimated on `val`, node0)
+- Trial outputs: `examples/CIFAR-10/SimCLR/runs/dcl_3/0000/`
+- Number of trials: 51 (0000–0050)
 
-#### ノード0（resnet32）スコア（train→val, KNN@20）
-| トライアル | ベストKNN@20(%) | ベストEpoch |
+#### Best trial configuration (Trial 0000)
+- Models (node0→2): `[resnet32, wideresnet28_2, resnet110]`
+- Gate matrix (row = i node = receiver, column = j node = sender. Each cell controls transfer j→i)
+
+| i\j | 0 | 1 | 2 |
+|---|---|---|---|
+| 0 | ThroughGate | NegativeLinearGate | PositiveLinearGate |
+| 1 | ThroughGate | ThroughGate | CutoffGate |
+| 2 | CutoffGate | PositiveLinearGate | PositiveLinearGate |
+
+> Note: In the code, the outer loop is `i` (receiver) and the inner loop is `j` (sender) (`{i}_{j}_gate`).
+
+#### Node0 score (train→val, KNN@20)
+| Trial | Best KNN@20(%) | Best Epoch |
 |---:|---:|---:|
 | 0000 | 74.16 | 359 |
 
-### 単体モデル結果（pre-train.py, train→val）
-- ログ: `examples/CIFAR-10/SimCLR/runs/pre-train/`
-- チェックポイント: `examples/CIFAR-10/SimCLR/checkpoint/pre-train/{model}/`
+### Single model results (pre-train.py, train→val)
+- Log: `examples/CIFAR-10/SimCLR/runs/pre-train/`
+- Checkpoints: `examples/CIFAR-10/SimCLR/checkpoint/pre-train/{model}/`
 
-| モデル | ベストKNN@20(%) | ベストEpoch |
+| Model | Best KNN@20(%) | Best Epoch |
 |---|---:|---:|
 | resnet32 | 73.60 | 363 |
 | resnet110 | 79.03 | 282 |
 | wideresnet28_2 | 79.36 | 334 |
 
-> 備考: スコアは TensorBoard の `train_score` / `test_score` に記録。
+> Note: Scores are logged to TensorBoard as `train_score` / `test_score`.
 
-### 単体モデル結果（test/pre-train.py, train+val→test）
-- ログ: `examples/CIFAR-10/SimCLR/test/runs/pre-train/`
-- チェックポイント: `examples/CIFAR-10/SimCLR/test/checkpoint/pre-train/{model}/`
+### Single model test results (pre-train.py, train+val → test)
+- Log: `examples/CIFAR-10/SimCLR/test/runs/pre-train/`
+- Checkpoints: `examples/CIFAR-10/SimCLR/test/checkpoint/pre-train/{model}/`
 
-| モデル | ベストKNN@20(%) | ベストEpoch |
+| Model | Best KNN@20(%) | Best Epoch |
 |---|---:|---:|
 | resnet32 | 73.74 | 369 |
 | resnet110 | 79.13 | 358 |
 | wideresnet28_2 | 79.39 | 374 |
 
+### Retraining + test results (train+val → test)
+
+#### dcl-test.py (retraining with the best trial)
+- Log: `examples/CIFAR-10/SimCLR/test/runs/dcl_3/0000/`
+- Checkpoints: `examples/CIFAR-10/SimCLR/test/checkpoint/dcl_3/0000/`
+
+| Node | Model | Best KNN@20(%) | Best Epoch |
+|---|---|---:|---:|
+| 0 | resnet32 | 74.28 | 347 |
+| 1 | wideresnet28_2 | 79.11 | 384 |
+| 2 | resnet110 | 78.60 | 393 |
+
+> Note: `dcl-test.py` reconstructs the graph with the best-trial configuration and evaluates on the `test` set.
+
+#### dml-test.py (all edges ThroughGate)
+- Log: `examples/CIFAR-10/SimCLR/test/runs/dml_3/0000/`
+- Checkpoints: `examples/CIFAR-10/SimCLR/test/checkpoint/dml_3/0000/`
+
+| Node | Model | Best KNN@20(%) | Best Epoch |
+|---|---|---:|---:|
+| 0 | resnet32 | 74.02 | 363 |
+| 1 | wideresnet28_2 | 78.71 | 338 |
+| 2 | resnet110 | 79.07 | 395 |
+
 ### Quick Start
-1) 事前学習（任意: 各モデルで実行可）
+1) Pre-train (optional)
 ```bash
 cd examples/CIFAR-10/SimCLR
 python pre-train.py --model resnet32
@@ -85,23 +122,22 @@ python pre-train.py --model resnet110
 python pre-train.py --model wideresnet28_2
 ```
 
-2) Optuna による探索（DCL × SimCLR）
+2) Search with Optuna (DCL)
 ```bash
 cd examples/CIFAR-10/SimCLR
 python dcl-train.py --num-nodes 3 --n_trials 100 \
   --gates ThroughGate CutoffGate PositiveLinearGate NegativeLinearGate
 ```
 
-3) テスト運用モードでの単体 SimCLR（train+val → test）
+3) Retraining + evaluation with the best trial (test-operation mode)
 ```bash
 cd examples/CIFAR-10/SimCLR/test
-python pre-train.py --model resnet32
+python dcl-test.py --num-nodes 3 --trial 0
+# If omitted, the study's best_trial is used by default
 ```
 
-### 補足
-- `runs/` は TensorBoard のログ出力先です。
-- `checkpoint/` にはベストモデルが保存されます（`pre-train` ほか）。
-- SimCLR は自己教師あり学習のため、スクリプト内では `SimCLRLoss` を使用し、KNN で表現品質を定期評価します。
-- DCL 探索中の各ノードのスコアは `runs/dcl_3/{trial}/{i}_{model}/` に出力されます。
-- データはスクリプト実行時に `torchvision` から自動ダウンロードされます（既存の `data/` があればそれを使用）。
+### Notes
+- `runs/` is the output directory for TensorBoard logs.
+- `checkpoint/` stores the best models (including `pre-train`).
+- For a node where all incoming edges are `CutoffGate` and `i!=0`, the corresponding model's pre-trained checkpoint is automatically loaded.
 
