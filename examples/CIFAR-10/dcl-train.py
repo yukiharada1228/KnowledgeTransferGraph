@@ -1,6 +1,5 @@
 # Import packages
 import argparse
-import math
 import os
 
 import optuna
@@ -11,7 +10,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from ktg import Edge, KnowledgeTransferGraph, Node, gates
-from ktg.dataset.cifar_datasets.cifar100 import get_datasets
+from ktg.dataset.cifar_datasets.cifar10 import get_datasets
 from ktg.losses import KLDivLoss
 from ktg.models import cifar_models
 from ktg.utils import AverageMeter, WorkerInitializer, load_checkpoint, set_seed
@@ -26,21 +25,19 @@ parser.add_argument(
     nargs="*",
     type=str,
 )
-# SinGate の探索範囲
-parser.add_argument("--num-cycles-min", type=float, default=0.0)
-parser.add_argument("--num-cycles-max", type=float, default=2.0)
-parser.add_argument("--phase-min", type=float, default=-math.pi)
-parser.add_argument("--phase-max", type=float, default=math.pi)
+parser.add_argument(
+    "--gates",
+    default=["ThroughGate", "CutoffGate", "PositiveLinearGate", "NegativeLinearGate"],
+    nargs="*",
+    type=str,
+)
 
 args = parser.parse_args()
 manualSeed = int(args.seed)
 num_nodes = int(args.num_nodes)
 n_trials = int(args.n_trials)
 models_name = args.models
-num_cycles_min = float(args.num_cycles_min)
-num_cycles_max = float(args.num_cycles_max)
-phase_min = float(args.phase_min)
-phase_max = float(args.phase_max)
+gates_name = args.gates
 
 
 def objective(trial):
@@ -89,7 +86,7 @@ def objective(trial):
         "args": {"T_max": max_epoch, "eta_min": 0.0},
     }
 
-    num_classes = 100
+    num_classes = 10
     nodes = []
     for i in range(num_nodes):
         gates_list = []
@@ -99,12 +96,11 @@ def objective(trial):
                 criterions.append(nn.CrossEntropyLoss())
             else:
                 criterions.append(KLDivLoss())
-            # SinGate のパラメータを各エッジで探索
-            num_cycles = trial.suggest_float(
-                f"{i}_{j}_num_cycles", num_cycles_min, num_cycles_max
+            gate_name = trial.suggest_categorical(
+                f"{i}_{j}_gate",
+                gates_name,
             )
-            phase = trial.suggest_float(f"{i}_{j}_phase", phase_min, phase_max)
-            gate = gates.SinGate(max_epoch, num_cycles=num_cycles, phase=phase)
+            gate = getattr(gates, gate_name)(max_epoch)
             gates_list.append(gate)
         if i == 0:
             model_name = models_name[0]
@@ -119,7 +115,7 @@ def objective(trial):
                 model=model, save_dir=f"checkpoint/pre-train/{model_name}", is_best=True
             )
         writer = SummaryWriter(
-            f"runs/dcl_sin_{num_nodes}/{trial.number:04}/{i}_{model_name}"
+            f"runs/dcl_{num_nodes}/{trial.number:04}/{i}_{model_name}"
         )
         optimizer = getattr(torch.optim, optim_setting["name"])(
             model.parameters(), **optim_setting["args"]
@@ -154,7 +150,7 @@ def objective(trial):
 
 if __name__ == "__main__":
     # Cteate study object
-    study_name = f"dcl_sin_{num_nodes}"
+    study_name = f"dcl_{num_nodes}"
     optuna_dir = f"optuna/{study_name}"
     os.makedirs(optuna_dir, exist_ok=True)
     storage = JournalStorage(JournalFileStorage(os.path.join(optuna_dir, "optuna.log")))
