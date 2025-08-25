@@ -44,7 +44,7 @@ def objective(trial):
     # Fix the seed value
     set_seed(manualSeed)
 
-    # Prepare the CIFAR-100 for training
+    # Prepare the CIFAR-10 for training
     batch_size = 64
     num_workers = 10
 

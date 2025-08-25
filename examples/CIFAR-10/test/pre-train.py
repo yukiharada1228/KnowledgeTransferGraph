@@ -31,7 +31,7 @@ set_seed(manualSeed)
 batch_size = 64
 num_workers = 10
 
-train_dataset, val_dataset = get_datasets()
+train_dataset, test_dataset = get_datasets(use_test_mode=True)
 
 train_dataloader = DataLoader(
     train_dataset,
@@ -43,7 +43,7 @@ train_dataloader = DataLoader(
     worker_init_fn=WorkerInitializer(manualSeed).worker_init_fn,
 )
 val_dataloader = DataLoader(
-    val_dataset,
+    test_dataset,
     batch_size=batch_size,
     shuffle=False,
     num_workers=num_workers,
