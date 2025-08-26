@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from ktg import Edge, KnowledgeTransferGraph, Node
+from ktg import KnowledgeTransferGraph, Node, build_edges
 from ktg.dataset.cifar_datasets.cifar10 import get_datasets
 from ktg.gates import ThroughGate
 from ktg.models import cifar_models
@@ -72,7 +72,7 @@ scheduler_setting = {
 num_classes = 10
 nodes = []
 
-gates = [ThroughGate(max_epoch)]
+gates_list = [ThroughGate(max_epoch)]
 criterions = [nn.CrossEntropyLoss()]
 model = getattr(cifar_models, model_name)(num_classes).cuda()
 writer = SummaryWriter(f"runs/pre-train/{model_name}")
@@ -83,7 +83,7 @@ optimizer = getattr(torch.optim, optim_setting["name"])(
 scheduler = getattr(torch.optim.lr_scheduler, scheduler_setting["name"])(
     optimizer, **scheduler_setting["args"]
 )
-edges = [Edge(c, g) for c, g in zip(criterions, gates)]
+edges = build_edges(criterions, gates_list)
 
 node = Node(
     model=model,

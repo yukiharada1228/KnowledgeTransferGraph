@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from ktg import Edge, KnowledgeTransferGraph, Node
+from ktg import KnowledgeTransferGraph, Node, build_edges
 from ktg.gates import ThroughGate
 from ktg.models.ssl_models import SimCLR
 from ktg.transforms.ssl_transforms import SimCLRTransforms
@@ -76,7 +76,7 @@ def main():
     ssl_model = SimCLR(encoder_func).cuda()
 
     # 自己教師あり学習損失のみを使用
-    gates = [ThroughGate(max_epoch)]
+    gates_list = [ThroughGate(max_epoch)]
 
     writer = SummaryWriter(f"runs/pre-train/{model_name}")
     save_dir = f"checkpoint/pre-train/{model_name}"
@@ -97,7 +97,7 @@ def main():
         num_cycles=0.5,
     )
 
-    edges = [Edge(SimCLRLoss(batch_size), ThroughGate(max_epoch))]
+    edges = build_edges([SimCLRLoss(batch_size)], gates_list)
 
     def knn_eval_fn(_model=ssl_model):
         # get_datasets を使い、Normalize なしの前処理に差し替え

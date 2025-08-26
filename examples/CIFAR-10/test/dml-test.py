@@ -9,7 +9,7 @@ from optuna.storages import JournalFileStorage, JournalStorage
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from ktg import Edge, KnowledgeTransferGraph, Node
+from ktg import KnowledgeTransferGraph, Node, build_edges
 from ktg.gates import ThroughGate
 from ktg.dataset.cifar_datasets.cifar10 import get_datasets
 from ktg.losses import KLDivLoss
@@ -167,7 +167,7 @@ def main():
         scheduler = getattr(torch.optim.lr_scheduler, scheduler_setting["name"])(
             optimizer, **scheduler_setting["args"]
         )
-        edges = [Edge(c, g) for c, g in zip(criterions, gates_list)]
+        edges = build_edges(criterions, gates_list)
 
         node = Node(
             model=model,

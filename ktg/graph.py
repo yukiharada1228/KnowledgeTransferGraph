@@ -35,6 +35,26 @@ class Edge(nn.Module):
         return self.gate(loss, epoch)
 
 
+def build_edges(criterions: list[nn.Module], gates: list[nn.Module]) -> list[Edge]:
+    """
+    Build a list of Edge instances with simple length validation and one-sided broadcast.
+
+    - If either `criterions` or `gates` has length 1 while the other has length N>1,
+      it will be broadcast to length N.
+    - Otherwise, their lengths must match.
+    """
+    if len(criterions) == 1 and len(gates) > 1:
+        criterions = criterions * len(gates)
+    if len(gates) == 1 and len(criterions) > 1:
+        gates = gates * len(criterions)
+    if len(criterions) != len(gates):
+        raise ValueError(
+            f"criterions({len(criterions)}) and gates({len(gates)}) must match in length "
+            "or one of them must be length 1 for broadcasting"
+        )
+    return [Edge(c, g) for c, g in zip(criterions, gates)]
+
+
 class TotalLoss(nn.Module):
     def __init__(self, edges: list[Edge]):
         super(TotalLoss, self).__init__()

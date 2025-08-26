@@ -9,7 +9,7 @@ from optuna.storages import JournalFileStorage, JournalStorage
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from ktg import Edge, KnowledgeTransferGraph, Node
+from ktg import KnowledgeTransferGraph, Node, build_edges
 from ktg.gates import ThroughGate
 from ktg.losses import SimCLRLoss, SimilarityMatrixKLDivLoss
 from ktg.models.ssl_models import SimCLR
@@ -193,7 +193,7 @@ def main():
             num_cycles=0.5,
         )
 
-        edges = [Edge(c, g) for c, g in zip(criterions, gates_list)]
+        edges = build_edges(criterions, gates_list)
 
         def knn_eval_fn(_model=ssl_model):
             # get_datasets を使い、Normalize なしの前処理に差し替え
